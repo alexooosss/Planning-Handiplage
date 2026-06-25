@@ -2157,13 +2157,15 @@ function PortalScreen({ accounts, onLogin }) {
           .transform-style-3d { transform-style: preserve-3d; }
           .backface-hidden { backface-visibility: hidden; }
           .rotate-y-180 { transform: rotateY(180deg); }
-          .card-lift {
-            transition: transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.35s ease;
-            will-change: transform;
-          }
-          .card-lift:hover {
-            transform: scale(1.05) translateY(-6px);
-            filter: drop-shadow(0 20px 32px rgba(0,0,0,0.28));
+          @media (hover: hover) and (pointer: fine) {
+            .card-lift {
+              transition: transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.35s ease;
+              will-change: transform;
+            }
+            .card-lift:hover {
+              transform: scale(1.05) translateY(-6px);
+              filter: drop-shadow(0 20px 32px rgba(0,0,0,0.28));
+            }
           }
         `}</style>
 
