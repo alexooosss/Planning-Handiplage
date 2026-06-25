@@ -3,6 +3,7 @@ import {
   Users, CalendarDays, LayoutGrid, BarChart3, Plus, Trash2, Wand2,
   Download, Upload, Printer, X, Clock, ChevronLeft, ChevronRight, Crown, FileText,
   ArrowLeftRight, Lock, LogOut, ShieldCheck, Inbox, Send, Check, KeyRound,
+  Moon, Sun, Mail, UserCircle2, Flag, AlertCircle,
 } from "lucide-react";
 
 const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -155,6 +156,30 @@ export default function App() {
   const [accounts, setAccounts] = useState([{ id: "admin", password: "admin", role: "admin", name: "Administrateur" }]);
   const [session, setSession] = useState(null);
   const [requests, setRequests] = useState([]);
+  const [happenings, setHappenings] = useState([]);
+  const addHappening = () => setHappenings((h) => [...h, { id: uid(), date: keyOf(new Date()), time: "09:00", title: "", instructions: "" }]);
+  const updateHappening = (id, patch) => setHappenings((h) => h.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const removeHappening = (id) => setHappenings((h) => h.filter((e) => e.id !== id));
+  const [userProfiles, setUserProfiles] = useState(() => { try { return JSON.parse(localStorage.getItem("hp-profiles") || "{}"); } catch { return {}; } });
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const myProfile = session ? (userProfiles[session.id] || {}) : {};
+  const updateProfile = (patch) => {
+    if (!session) return;
+    const next = { ...userProfiles, [session.id]: { ...myProfile, ...patch } };
+    setUserProfiles(next);
+    try { localStorage.setItem("hp-profiles", JSON.stringify(next)); } catch {}
+  };
+  const changePassword = (currentPw, newPw) => {
+    const idx = accounts.findIndex((a) => a.id === session?.id);
+    if (idx === -1 || accounts[idx].password !== currentPw) return "Mot de passe actuel incorrect.";
+    updateAccount(idx, { password: newPw });
+    return null;
+  };
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark-mode", !!myProfile.darkMode);
+  }, [myProfile.darkMode]);
 
   const months = useMemo(() => monthsInSeason(seasonOpen, seasonClose), [seasonOpen, seasonClose]);
 
@@ -349,7 +374,7 @@ export default function App() {
   /* ----- import / export ----- */
   function exportJSON() {
     const blob = new Blob(
-      [JSON.stringify({ seasonOpen, seasonClose, monthTeams, minEffectif, minHalf, events, assignments, accounts, requests }, null, 2)],
+      [JSON.stringify({ seasonOpen, seasonClose, monthTeams, minEffectif, minHalf, events, assignments, accounts, requests, happenings }, null, 2)],
       { type: "application/json" }
     );
     const url = URL.createObjectURL(blob);
@@ -373,6 +398,7 @@ export default function App() {
 if (d.assignments) setAssignments(cleanAssignments(d.assignments));
         if (d.accounts) setAccounts(d.accounts);
         if (d.requests) setRequests(d.requests);
+        if (d.happenings) setHappenings(d.happenings);
       } catch { alert("Fichier illisible."); }
     };
     reader.readAsText(file);
@@ -450,9 +476,9 @@ if (s && SHIFTS[type]) {
       });
     }
   };
-  const decideRequest = (req, approve) => {
+  const decideRequest = (req, approve, adminReply = "") => {
     if (approve) applyRequest(req);
-    setRequests((list) => list.map((r) => (r.id === req.id ? { ...r, status: approve ? "approved" : "rejected" } : r)));
+    setRequests((list) => list.map((r) => (r.id === req.id ? { ...r, status: approve ? "approved" : "rejected", adminReply: adminReply.trim() } : r)));
   };
 
   /* ---------------------------------------------------------------- */
@@ -746,12 +772,23 @@ if (s && SHIFTS[type]) {
               </button>
             </>
           )}
-          <span className="hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium text-white/80 sm:flex" style={{ background: "rgba(255,255,255,0.15)" }}>
-            {isAdmin ? <ShieldCheck size={13} /> : <Users size={13} />} {session.name}
-          </span>
+          <button
+            onClick={() => setProfileOpen(true)}
+            title="Mon profil"
+            className="flex flex-none items-center gap-1.5 rounded-full p-0.5 transition-opacity hover:opacity-90"
+            style={{ background: "rgba(255,255,255,0.15)", border: "2px solid rgba(255,255,255,0.3)" }}
+          >
+            {myProfile.photoUrl ? (
+              <img src={myProfile.photoUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+            ) : (
+              <span className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: avatarColor(session.name) }}>
+                {initials(session.name)}
+              </span>
+            )}
+          </button>
           <button onClick={() => { setSession(null); }} title="Se déconnecter" className="flex flex-none items-center gap-1.5 rounded-md p-1.5 text-xs font-medium text-white/80 hover:bg-white/10 sm:px-2.5" style={{ border: "1px solid rgba(255,255,255,0.25)" }}>
-  <LogOut size={14} /> <span className="hidden sm:inline">Quitter</span>
-</button>
+            <LogOut size={14} /> <span className="hidden sm:inline">Quitter</span>
+          </button>
         </div>
 
         {/* Tabs (admin) */}
@@ -764,6 +801,7 @@ if (s && SHIFTS[type]) {
             ["couverture", "Couverture", CalendarDays],
             ["heures", "Heures", BarChart3],
             ["export", "Export", FileText],
+            ["evenements", "Événements", Flag],
             ["comptes", "Comptes", KeyRound],
             ["demandes", "Demandes", Inbox],
           ].map(([id, label, Icon]) => (
@@ -804,7 +842,7 @@ if (s && SHIFTS[type]) {
 
       <main className="mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-6">
         {!isAdmin ? (
-          <UserApp {...{ session, agents, dates, assignments, currentMonth, monthLabel, requests, submitRequest }} />
+          <UserApp {...{ session, agents, dates, assignments, currentMonth, monthLabel, requests, submitRequest, happenings }} />
         ) : (
           <>
             {tab === "equipe" && (
@@ -821,6 +859,7 @@ if (s && SHIFTS[type]) {
             )}
             {tab === "heures" && <HeuresTab {...{ totals, maxOT, hasPlan, agents, dates, assignments, setAssignments }} />}
             {tab === "export" && <ExportTab {...{ agents, dates, assignments, minHalf, totals, hasPlan, events }} />}
+            {tab === "evenements" && <EvenementsTab {...{ happenings, addHappening, updateHappening, removeHappening }} />}
             {tab === "comptes" && <ComptesTab {...{ accounts, addAccount, updateAccount, removeAccount, createTeamAccounts }} />}
             {tab === "demandes" && <DemandesTab {...{ requests, decideRequest }} />}
           </>
@@ -835,6 +874,17 @@ if (s && SHIFTS[type]) {
           value={assignments[editing.agentId]?.[editing.dateKey] || { type: "R", ot: 0 }}
           onChange={(patch) => setCell(editing.agentId, editing.dateKey, patch)}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {/* Panneau profil */}
+      {profileOpen && (
+        <ProfileDrawer
+          session={session}
+          profile={myProfile}
+          updateProfile={updateProfile}
+          changePassword={changePassword}
+          onClose={() => setProfileOpen(false)}
         />
       )}
     </div>
@@ -1897,9 +1947,172 @@ function Empty({ onAction }) {
 /*  Connexion & rôles                                                  */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Helpers avatar                                                      */
+/* ------------------------------------------------------------------ */
+function initials(name = "") {
+  return name.trim().split(/\s+/).map((w) => w[0]?.toUpperCase() || "").join("").slice(0, 2);
+}
+function avatarColor(name = "") {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `hsl(${h}, 55%, 42%)`;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Panneau Profil                                                      */
+/* ------------------------------------------------------------------ */
+function ProfileDrawer({ session, profile, updateProfile, changePassword, onClose }) {
+  const [email, setEmail] = useState(profile.email || "");
+  const [photoUrl, setPhotoUrl] = useState(profile.photoUrl || "");
+  const [pwOpen, setPwOpen] = useState(false);
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [pwMsg, setPwMsg] = useState(null); // { ok: bool, text: str }
+  const [saved, setSaved] = useState(false);
+
+  const save = () => {
+    updateProfile({ email: email.trim(), photoUrl: photoUrl.trim() });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const submitPw = () => {
+    if (!newPw || newPw !== confirmPw) { setPwMsg({ ok: false, text: "Les nouveaux mots de passe ne correspondent pas." }); return; }
+    if (newPw.length < 4) { setPwMsg({ ok: false, text: "Minimum 4 caractères." }); return; }
+    const err = changePassword(curPw, newPw);
+    if (err) { setPwMsg({ ok: false, text: err }); return; }
+    setPwMsg({ ok: true, text: "Mot de passe mis à jour." });
+    setCurPw(""); setNewPw(""); setConfirmPw("");
+    setTimeout(() => { setPwMsg(null); setPwOpen(false); }, 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      {/* Panel */}
+      <div className="relative z-10 flex h-full w-full max-w-sm flex-col bg-white shadow-2xl overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4" style={{ background: "#163F87" }}>
+          <div className="flex-1">
+            <p className="text-xs font-medium text-white/60">Mon profil</p>
+            <p className="text-sm font-semibold text-white">{session.name}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-5 p-5">
+          {/* Avatar */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative">
+              {profile.photoUrl ? (
+                <img src={profile.photoUrl} alt="" className="h-20 w-20 rounded-full object-cover shadow" />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold text-white shadow" style={{ background: avatarColor(session.name) }}>
+                  {initials(session.name)}
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">URL de photo (optionnel)</label>
+              <input
+                value={photoUrl}
+                onChange={(e) => setPhotoUrl(e.target.value)}
+                placeholder="https://..."
+                className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+              />
+            </div>
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <Mail size={12} /> Adresse e-mail
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="prenom.nom@exemple.fr"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+            />
+            <p className="mt-1 text-[10px] text-slate-400">Visible par l'administrateur.</p>
+          </div>
+
+          {/* Mode sombre */}
+          <div>
+            <label className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              {profile.darkMode ? <Moon size={12} /> : <Sun size={12} />} Mode d'affichage
+            </label>
+            <div className="flex rounded-lg border border-slate-200 p-1 gap-1">
+              <button
+                onClick={() => updateProfile({ darkMode: false })}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all ${!profile.darkMode ? "bg-white text-slate-700 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+              >
+                <Sun size={15} /> Clair
+              </button>
+              <button
+                onClick={() => updateProfile({ darkMode: true })}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all ${profile.darkMode ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+              >
+                <Moon size={15} /> Sombre
+              </button>
+            </div>
+          </div>
+
+          {/* Sauvegarder profil */}
+          <button
+            onClick={save}
+            className="flex w-full items-center justify-center gap-2 rounded-md py-2.5 text-sm font-semibold text-white transition-all"
+            style={{ background: "#163F87" }}
+          >
+            {saved ? <><Check size={15} /> Enregistré</> : "Enregistrer le profil"}
+          </button>
+
+          {/* Changer le mot de passe */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50">
+            <button
+              onClick={() => setPwOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-slate-700"
+            >
+              <span className="flex items-center gap-2"><Lock size={14} /> Changer le mot de passe</span>
+              <ChevronRight size={14} className={`text-slate-400 transition-transform ${pwOpen ? "rotate-90" : ""}`} />
+            </button>
+            {pwOpen && (
+              <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-2.5">
+                <div>
+                  <label className="text-[11px] font-medium text-slate-500">Mot de passe actuel</label>
+                  <input type="password" value={curPw} onChange={(e) => setCurPw(e.target.value)} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-slate-500">Nouveau mot de passe</label>
+                  <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-slate-500">Confirmer</label>
+                  <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitPw()} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
+                </div>
+                {pwMsg && (
+                  <p className={`rounded-md px-3 py-2 text-xs font-medium ${pwMsg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{pwMsg.text}</p>
+                )}
+                <button onClick={submitPw} className="w-full rounded-md py-2 text-sm font-semibold text-white" style={{ background: "#163F87" }}>
+                  Mettre à jour
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PortalScreen({ accounts, onLogin }) {
   const [flipped, setFlipped] = useState(null); // "admin", "user" ou null
-  const [hovered, setHovered] = useState(null); // Suit la position de la souris
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
@@ -1912,153 +2125,274 @@ function PortalScreen({ accounts, onLogin }) {
   };
 
   const submit = (role) => {
-    const acc = accounts.find((a) => a.id === id.trim() && a.password === pw && a.role === role);
+    const acc = accounts.find(
+      (a) => a.id === id.trim() && a.password === pw && a.role === role
+    );
     if (acc) onLogin(acc);
     else setErr("Identifiants incorrects.");
   };
 
-  // Conditions pour savoir quel fond afficher
-  const isAdminActive = flipped === 'admin' || (!flipped && hovered === 'admin');
-  const isUserActive = flipped === 'user' || (!flipped && hovered === 'user');
-
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center p-4 font-sans overflow-hidden">
-      
-      {/* Photo de fond Handiplage */}
-      <div className="absolute inset-0 z-0" style={{ backgroundImage: "url('/handiplage.jpg')", backgroundSize: "cover", backgroundPosition: "center" }} />
+    <div className="relative min-h-screen overflow-x-hidden font-sans">
+      {/* Photo de fond */}
+      <div
+        className="absolute inset-0 z-0"
+        style={{
+          backgroundImage: `url(${import.meta.env.BASE_URL}handiplage.jpg)`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      />
 
-      {/* Overlay navy permanent : assure lisibilité et cohérence de marque */}
-      <div className="absolute inset-0 z-0" style={{ background: "rgba(19, 56, 119, 0.72)" }} />
+      {/* Overlay principal */}
+      <div
+        className="absolute inset-0 z-0"
+        style={{ background: "rgba(19, 56, 119, 0.72)" }}
+      />
 
-      {/* Overlay coloré dynamique (très subtil sur la photo) */}
-      <div className={`absolute inset-0 z-0 transition-opacity duration-700 ease-in-out ${isAdminActive ? "opacity-100" : "opacity-0"}`}
-        style={{ background: "rgba(22, 63, 135, 0.25)" }} />
-      <div className={`absolute inset-0 z-0 transition-opacity duration-700 ease-in-out ${isUserActive ? "opacity-100" : "opacity-0"}`}
-        style={{ background: "rgba(52, 152, 219, 0.2)" }} />
-
-      {/* Contenu principal (avec z-10 pour être par-dessus le fond) */}
-      <div className="relative z-10 flex w-full flex-col items-center">
-        {/* Styles injectés pour l'animation 3D */}
+      {/* Contenu */}
+      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-center px-3 py-4 sm:px-4 sm:py-6 md:py-8">
         <style>{`
           .perspective-1000 { perspective: 1000px; }
           .transform-style-3d { transform-style: preserve-3d; }
           .backface-hidden { backface-visibility: hidden; }
           .rotate-y-180 { transform: rotateY(180deg); }
+          .card-lift {
+            transition: transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.35s ease;
+            will-change: transform;
+          }
+          .card-lift:hover {
+            transform: scale(1.05) translateY(-6px);
+            filter: drop-shadow(0 20px 32px rgba(0,0,0,0.28));
+          }
         `}</style>
-        
-        <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg" style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.25)" }}>
-          <CalendarDays size={32} color="#fff" />
+
+        {/* En-tête compact */}
+        <div
+          className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl shadow-lg sm:mb-4 sm:h-14 sm:w-14 sm:rounded-2xl md:h-16 md:w-16"
+          style={{
+            background: "rgba(255,255,255,0.15)",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(255,255,255,0.25)",
+          }}
+        >
+          <CalendarDays size={24} color="#fff" className="sm:h-8 sm:w-8" />
         </div>
-        <h1 className="mb-10 text-center text-3xl font-bold tracking-tight text-white drop-shadow">
+
+        <h1 className="mb-4 max-w-xs text-center text-xl font-bold tracking-tight text-white drop-shadow sm:mb-6 sm:max-w-none sm:text-2xl md:mb-8 md:text-3xl">
           Bienvenue sur le Planning
         </h1>
-        
-        <div className="grid w-full max-w-4xl gap-6 md:grid-cols-2">
-          
-          {/* CARTE ADMINISTRATEUR */}
-          <div 
-            className="perspective-1000 h-[380px] w-full"
-            onMouseEnter={() => setHovered('admin')}
-            onMouseLeave={() => setHovered(null)}
+
+        {/* Cartes */}
+        <div className="grid w-full max-w-sm gap-3 sm:max-w-xl sm:gap-4 md:max-w-4xl md:grid-cols-2 md:gap-6">
+          {/* ADMIN */}
+          <div
+            className={`perspective-1000 h-[265px] w-full sm:h-[285px] md:h-[360px] ${flipped !== "admin" ? "card-lift" : ""}`}
           >
-            <div className={`relative h-full w-full transition-transform duration-700 transform-style-3d ${flipped === 'admin' ? 'rotate-y-180' : ''}`}>
-              
-              {/* Recto */}
+            <div
+              className={`relative h-full w-full transition-transform duration-700 transform-style-3d ${
+                flipped === "admin" ? "rotate-y-180" : ""
+              }`}
+            >
+              {/* Recto admin */}
               <button
-                onClick={() => handleFlip('admin')}
-                className="absolute inset-0 flex h-full w-full flex-col items-center justify-center rounded-2xl border-2 border-transparent bg-white/90 backdrop-blur-sm p-8 shadow-md backface-hidden transition-all hover:border-blue-400 hover:shadow-lg"
+                onClick={() => handleFlip("admin")}
+                className="absolute inset-0 flex h-full w-full flex-col items-center justify-center rounded-xl border-2 border-transparent bg-white/90 p-4 text-center shadow-md backdrop-blur-sm backface-hidden sm:rounded-2xl sm:p-6 md:p-8"
               >
-                <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full" style={{ background: "rgba(22,63,135,0.1)", color: "#163F87" }}>
-                  <ShieldCheck size={40} />
+                <div
+                  className="mb-3 flex h-14 w-14 items-center justify-center rounded-full sm:mb-4 sm:h-16 sm:w-16 md:h-20 md:w-20"
+                  style={{
+                    background: "rgba(22,63,135,0.1)",
+                    color: "#163F87",
+                  }}
+                >
+                  <ShieldCheck size={28} className="sm:h-8 sm:w-8 md:h-10 md:w-10" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-700">Espace Administrateur</h2>
-                <p className="mt-2 text-center text-sm text-slate-500">Gestion du planning, de l'équipe et des paramètres de la saison.</p>
+
+                <h2 className="text-base font-bold text-slate-700 sm:text-lg md:text-xl">
+                  Espace Administrateur
+                </h2>
+
+                <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-slate-500 sm:mt-2 sm:text-sm">
+                  Gestion du planning, de l'équipe et des paramètres.
+                </p>
               </button>
-              
-              {/* Verso (Formulaire de connexion) */}
-              <div className="absolute inset-0 flex h-full w-full flex-col rounded-2xl border border-blue-200 bg-white/95 backdrop-blur-md p-6 shadow-xl backface-hidden rotate-y-180">
-                <button onClick={() => setFlipped(null)} className="absolute left-4 top-4 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-slate-700">
-                  <ChevronLeft size={16} /> Retour
-                </button>
-                
-                <div className="mx-auto mt-6 flex h-12 w-12 items-center justify-center rounded-xl shadow-sm" style={{ background: "#163F87" }}>
-                  <ShieldCheck size={24} color="#fff" />
-                </div>
-                <h2 className="mt-4 text-center text-lg font-semibold text-slate-800">Administrateur</h2>
-                
-                <div className="mt-4 flex flex-col gap-3">
-                  <input value={flipped === 'admin' ? id : ''} onChange={(e) => { setId(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit('admin')} className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all" placeholder="Identifiant" />
-                  <input type="password" value={flipped === 'admin' ? pw : ''} onChange={(e) => { setPw(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit('admin')} className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all" placeholder="Mot de passe" />
-                </div>
-                
-                {flipped === 'admin' && err && <p className="mt-2 rounded-md bg-red-50 px-2.5 py-1.5 text-xs text-red-600">{err}</p>}
-                
-                <button onClick={() => submit('admin')} className="mt-auto flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:shadow" style={{ background: "#163F87" }} onMouseOver={e => e.currentTarget.style.background="#133877"} onMouseOut={e => e.currentTarget.style.background="#163F87"}>
-                  <KeyRound size={15} /> Se connecter
-                </button>
-              </div>
 
-            </div>
-          </div>
+              {/* Verso admin */}
+<div className="absolute inset-0 flex h-full w-full flex-col rounded-xl border border-blue-200 bg-white/95 p-4 shadow-xl backdrop-blur-md backface-hidden rotate-y-180 sm:rounded-2xl sm:p-5 md:p-6">
+  <button
+    onClick={() => setFlipped(null)}
+    className="absolute left-3 top-3 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-slate-700 sm:left-4 sm:top-4"
+  >
+    <ChevronLeft size={15} /> Retour
+  </button>
 
-          {/* CARTE HANDIPLAGISTE */}
-          <div 
-            className="perspective-1000 h-[380px] w-full"
-            onMouseEnter={() => setHovered('user')}
-            onMouseLeave={() => setHovered(null)}
-          >
-            <div className={`relative h-full w-full transition-transform duration-700 transform-style-3d ${flipped === 'user' ? 'rotate-y-180' : ''}`}>
-              
-              {/* Recto */}
-              <button
-  onClick={() => handleFlip('user')}
-  className="absolute inset-0 flex h-full w-full flex-col items-center justify-center rounded-2xl border-2 border-transparent bg-white/90 backdrop-blur-sm p-8 shadow-md backface-hidden transition-all hover:border-yellow-400 hover:shadow-lg"
->
-  <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-yellow-50 text-yellow-600">
-    <Users size={40} />
+  <div className="mt-8 flex flex-1 items-center gap-4 sm:mt-9 sm:gap-5 md:flex-col md:justify-center md:gap-3">
+    {/* Icône à gauche sur mobile, au-dessus sur desktop */}
+    <div
+      className="flex h-16 w-16 flex-none items-center justify-center rounded-2xl shadow-sm sm:h-20 sm:w-20 md:h-12 md:w-12"
+      style={{ background: "#163F87" }}
+    >
+      <ShieldCheck size={30} color="#fff" className="sm:h-9 sm:w-9 md:h-6 md:w-6" />
+    </div>
+
+    {/* Formulaire à droite sur mobile */}
+    <div className="min-w-0 flex-1 md:w-full">
+  <h2 className="mb-3 text-right text-lg font-bold text-slate-800 sm:text-xl md:text-center">
+    Administrateur
+  </h2>
+
+
+      <div className="flex flex-col gap-2 sm:gap-3">
+        <input
+          value={flipped === "admin" ? id : ""}
+          onChange={(e) => {
+            setId(e.target.value);
+            setErr("");
+          }}
+          onKeyDown={(e) => e.key === "Enter" && submit("admin")}
+          className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          placeholder="Identifiant"
+        />
+
+        <input
+          type="password"
+          value={flipped === "admin" ? pw : ""}
+          onChange={(e) => {
+            setPw(e.target.value);
+            setErr("");
+          }}
+          onKeyDown={(e) => e.key === "Enter" && submit("admin")}
+          className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition-all focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          placeholder="Mot de passe"
+        />
+      </div>
+
+      {flipped === "admin" && err && (
+        <p className="mt-2 rounded-md bg-red-50 px-2.5 py-1.5 text-xs text-red-600">
+          {err}
+        </p>
+      )}
+    </div>
   </div>
-  <h2 className="text-xl font-bold text-slate-700">Espace Handiplagiste</h2>
-  <p className="mt-2 text-center text-sm text-slate-500">Consultation du planning, échanges de postes et congés.</p>
-</button>
 
-              
-              {/* Verso (Formulaire de connexion) */}
-<div className="absolute inset-0 flex h-full w-full flex-col rounded-2xl border border-yellow-200 bg-white/95 backdrop-blur-md p-6 shadow-xl backface-hidden rotate-y-180">
-                <button onClick={() => setFlipped(null)} className="absolute left-4 top-4 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-slate-700">
-                  <ChevronLeft size={16} /> Retour
-                </button>
-                
-                <div className="mx-auto mt-6 flex h-12 w-12 items-center justify-center rounded-xl bg-yellow-500 shadow-sm">
-  <Users size={24} color="#fff" />
+  <button
+    onClick={() => submit("admin")}
+    className="mx-auto mt-4 mb-3 flex w-full max-w-xs items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:shadow md:mt-3 md:mb-4"
+    style={{ background: "#163F87" }}
+    onMouseOver={(e) => (e.currentTarget.style.background = "#133877")}
+    onMouseOut={(e) => (e.currentTarget.style.background = "#163F87")}
+  >
+    <KeyRound size={15} /> Se connecter
+  </button>
 </div>
 
-                <h2 className="mt-4 text-center text-lg font-semibold text-slate-800">Handiplagiste</h2>
-                
-                <div className="mt-4 flex flex-col gap-3">
-                  <input value={flipped === 'user' ? id : ''} onChange={(e) => { setId(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit('user')} className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-yellow-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30
- transition-all" placeholder="Identifiant" />
-                  <input type="password" value={flipped === 'user' ? pw : ''} onChange={(e) => { setPw(e.target.value); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit('user')} className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-yellow-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30 transition-all" placeholder="Mot de passe" />
-                </div>
-                
-                {flipped === 'user' && err && <p className="mt-2 rounded-md bg-red-50 px-2.5 py-1.5 text-xs text-red-600">{err}</p>}
-                
-                <button
-  onClick={() => submit('user')}
-  className="mt-auto flex w-full items-center justify-center gap-2 rounded-md bg-yellow-400 px-3 py-2 text-sm font-semibold text-amber-950 shadow-sm transition-all hover:bg-yellow-500 hover:shadow"
->
-  <KeyRound size={15} /> Se connecter
-</button>
-
-              </div>
-
             </div>
           </div>
 
+          {/* HANDIPLAGISTE */}
+          <div
+            className={`perspective-1000 h-[265px] w-full sm:h-[285px] md:h-[360px] ${flipped !== "user" ? "card-lift" : ""}`}
+          >
+            <div
+              className={`relative h-full w-full transition-transform duration-700 transform-style-3d ${
+                flipped === "user" ? "rotate-y-180" : ""
+              }`}
+            >
+              {/* Recto user */}
+              <button
+                onClick={() => handleFlip("user")}
+                className="absolute inset-0 flex h-full w-full flex-col items-center justify-center rounded-xl border-2 border-transparent bg-white/90 p-4 text-center shadow-md backdrop-blur-sm backface-hidden sm:rounded-2xl sm:p-6 md:p-8"
+              >
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-yellow-50 text-yellow-600 sm:mb-4 sm:h-16 sm:w-16 md:h-20 md:w-20">
+                  <Users size={28} className="sm:h-8 sm:w-8 md:h-10 md:w-10" />
+                </div>
+
+                <h2 className="text-base font-bold text-slate-700 sm:text-lg md:text-xl">
+                  Espace Handiplagiste
+                </h2>
+
+                <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-slate-500 sm:mt-2 sm:text-sm">
+                  Consultation du planning, échanges et congés.
+                </p>
+              </button>
+
+              {/* Verso user */}
+<div className="absolute inset-0 flex h-full w-full flex-col rounded-xl border border-yellow-200 bg-white/95 p-4 shadow-xl backdrop-blur-md backface-hidden rotate-y-180 sm:rounded-2xl sm:p-5 md:p-6">
+  <button
+    onClick={() => setFlipped(null)}
+    className="absolute left-3 top-3 flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-slate-700 sm:left-4 sm:top-4"
+  >
+    <ChevronLeft size={15} /> Retour
+  </button>
+
+  <div className="mt-8 flex flex-1 items-center gap-4 sm:mt-9 sm:gap-5 md:flex-col md:justify-center md:gap-3">
+    {/* Icône à gauche sur mobile, au-dessus sur desktop */}
+    <div className="flex h-16 w-16 flex-none items-center justify-center rounded-2xl bg-yellow-500 shadow-sm sm:h-20 sm:w-20 md:h-12 md:w-12">
+      <Users size={30} color="#fff" className="sm:h-9 sm:w-9 md:h-6 md:w-6" />
+    </div>
+
+    {/* Formulaire à droite sur mobile */}
+    <div className="min-w-0 flex-1 md:w-full">
+  <h2 className="mb-3 text-right text-lg font-bold text-slate-800 sm:text-xl md:text-center">
+    Handiplagiste
+  </h2>
+
+
+      <div className="flex flex-col gap-2 sm:gap-3">
+        <input
+          value={flipped === "user" ? id : ""}
+          onChange={(e) => {
+            setId(e.target.value);
+            setErr("");
+          }}
+          onKeyDown={(e) => e.key === "Enter" && submit("user")}
+          className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition-all focus:border-yellow-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30"
+          placeholder="Identifiant"
+        />
+
+        <input
+          type="password"
+          value={flipped === "user" ? pw : ""}
+          onChange={(e) => {
+            setPw(e.target.value);
+            setErr("");
+          }}
+          onKeyDown={(e) => e.key === "Enter" && submit("user")}
+          className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition-all focus:border-yellow-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500/30"
+          placeholder="Mot de passe"
+        />
+      </div>
+
+      {flipped === "user" && err && (
+        <p className="mt-2 rounded-md bg-red-50 px-2.5 py-1.5 text-xs text-red-600">
+          {err}
+        </p>
+      )}
+    </div>
+  </div>
+
+  <button
+    onClick={() => submit("user")}
+    className="mx-auto mt-4 mb-3 flex w-full max-w-xs items-center justify-center gap-2 rounded-md bg-yellow-400 px-3 py-2 text-sm font-semibold text-amber-950 shadow-sm transition-all hover:bg-yellow-500 hover:shadow md:mt-3 md:mb-4"
+  >
+    <KeyRound size={15} /> Se connecter
+  </button>
+</div>
+
+            </div>
+          </div>
         </div>
+
+        {/* Indication mobile */}
+        <p className="mt-3 text-center text-[11px] text-white/60 sm:mt-4 sm:text-xs">
+          Sélectionnez votre espace pour vous connecter.
+        </p>
       </div>
     </div>
   );
 }
+
 
 function StatusBadge({ status }) {
   const m = { pending: ["En attente", "#B45309", "#FEF3C7"], approved: ["Acceptée", "#15803D", "#DCFCE7"], rejected: ["Refusée", "#B91C1C", "#FEE2E2"] };
@@ -2069,20 +2403,27 @@ function StatusBadge({ status }) {
 function reqLabel(r) {
   const d = parseDate(r.dateKey);
   const ds = `${WD_SHORT[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
-  if (r.type === "swap") return { icon: ArrowLeftRight, title: "Échange d'heures", detail: `${ds} · avec ${r.targetName}` };
+  if (r.type === "swap") return { icon: ArrowLeftRight, title: "Échange d'heures", detail: `${ds} · avec ${r.targetName}${r.swapReason ? ` · ${r.swapReason}` : ""}` };
   return { icon: CalendarDays, title: "Congé", detail: `${ds} · ${r.reason}` };
 }
 
 function RequestRow({ r, showWho }) {
   const { icon: Icon, title, detail } = reqLabel(r);
   return (
-    <div className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50/60 px-2 py-1.5">
-      <Icon size={14} className="flex-none text-slate-400" />
-      <div className="min-w-0">
-        <p className="text-xs font-medium text-slate-700">{showWho ? `${r.fromName} — ${title}` : title}</p>
-        <p className="truncate text-xs text-slate-400">{detail}</p>
+    <div className="rounded-md border border-slate-100 bg-slate-50/60 px-2 py-1.5">
+      <div className="flex items-center gap-2">
+        <Icon size={14} className="flex-none text-slate-400" />
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-700">{showWho ? `${r.fromName} — ${title}` : title}</p>
+          <p className="truncate text-xs text-slate-400">{detail}</p>
+        </div>
+        <span className="ml-auto flex-none"><StatusBadge status={r.status} /></span>
       </div>
-      <span className="ml-auto flex-none"><StatusBadge status={r.status} /></span>
+      {r.adminReply && (
+        <p className="mt-1 rounded bg-slate-100 px-2 py-1 text-[11px] italic text-slate-500">
+          <span className="not-italic font-medium text-slate-400">Admin : </span>{r.adminReply}
+        </p>
+      )}
     </div>
   );
 }
@@ -2091,12 +2432,13 @@ function RequestRow({ r, showWho }) {
 /*  Espace utilisateur (personnel)                                     */
 /* ------------------------------------------------------------------ */
 
-function UserApp({ session, agents, dates, assignments, currentMonth, monthLabel, requests, submitRequest }) {
+function UserApp({ session, agents, dates, assignments, currentMonth, monthLabel, requests, submitRequest, happenings }) {
   const me = agents.find((a) => a.name === session.name);
   const [swapDay, setSwapDay] = useState("");
   const [swapTo, setSwapTo] = useState("");
   const [leaveDay, setLeaveDay] = useState("");
   const [reason, setReason] = useState("");
+  const [expandedDay, setExpandedDay] = useState(null);
   const myReqs = requests.filter((r) => r.fromName === session.name).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const other = (h) => (h === "M" ? "AM" : "M");
   const dlabel = (k) => { const d = parseDate(k); return `${WD_FULL[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`; };
@@ -2112,38 +2454,214 @@ function UserApp({ session, agents, dates, assignments, currentMonth, monthLabel
   }
 
   const myDays = dates.filter((d) => { const c = assignments[me.id]?.[keyOf(d)]; return c && c.type !== "R"; });
+
+  // Regroupement par semaine (lundi → dimanche)
+  const weekMap = new Map();
+  myDays.forEach((d) => {
+    const wk = mondayKey(d);
+    if (!weekMap.has(wk)) weekMap.set(wk, []);
+    weekMap.get(wk).push(d);
+  });
+  const weekGroups = [...weekMap.entries()].map(([wk, days], i) => {
+    const totalH = days.reduce((s, d) => {
+      const c = assignments[me.id]?.[keyOf(d)];
+      const sh = ALL[normalizeType(c?.type)];
+      return s + (sh?.hours || 0) + (c?.ot || 0);
+    }, 0);
+    return { weekKey: wk, days, totalH, weekLabel: `Semaine ${i + 1}` };
+  });
+  const totalHours = weekGroups.reduce((s, g) => s + g.totalH, 0);
+  const totalOT = myDays.reduce((s, d) => s + (assignments[me.id]?.[keyOf(d)]?.ot || 0), 0);
+
+  const [swapReason, setSwapReason] = useState("");
   const swapDays = dates.filter((d) => { const c = assignments[me.id]?.[keyOf(d)]; return c && (c.type === "M" || c.type === "AM") && !c.tag; });
   const partnersFor = (k) => {
     const mine = assignments[me.id]?.[k];
     if (!mine) return [];
     return agents.filter((a) => {
-      if (a.id === me.id || a.role !== "agent") return false;
+      if (a.id === me.id || a.role !== me.role) return false;
       const c = assignments[a.id]?.[k];
       return c && c.type === other(mine.type) && !c.tag;
     });
   };
   const partners = swapDay ? partnersFor(swapDay) : [];
 
-  const submitSwap = () => { if (!swapDay || !swapTo) return; submitRequest({ type: "swap", fromName: session.name, monthKey: currentMonth, dateKey: swapDay, targetName: swapTo }); setSwapDay(""); setSwapTo(""); };
+  const submitSwap = () => {
+    if (!swapDay || !swapTo) return;
+    submitRequest({ type: "swap", fromName: session.name, monthKey: currentMonth, dateKey: swapDay, targetName: swapTo, swapReason: swapReason.trim() });
+    setSwapDay(""); setSwapTo(""); setSwapReason("");
+  };
   const submitLeave = () => { if (!leaveDay || !reason.trim()) return; submitRequest({ type: "leave", fromName: session.name, monthKey: currentMonth, dateKey: leaveDay, reason: reason.trim() }); setLeaveDay(""); setReason(""); };
 
+  const today = keyOf(new Date());
+  const upcomingEvents = [...(happenings || [])]
+    .filter((ev) => ev.date >= today && ev.title)
+    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+
   return (
-    <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-2">
+    <div className="mx-auto max-w-5xl space-y-6">
+      {/* Événements à venir */}
+      {upcomingEvents.length > 0 && (
+        <div className="rounded-xl border border-brand/20 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2.5 border-b border-brand/10 px-4 py-3" style={{ background: "#EBF0FA" }}>
+            <Flag size={15} style={{ color: "#163F87" }} />
+            <span className="text-sm font-semibold" style={{ color: "#163F87" }}>Événements à venir</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {upcomingEvents.map((ev) => {
+              const d = parseDate(ev.date);
+              const isToday = ev.date === today;
+              return (
+                <div key={ev.id} className={`flex gap-4 px-4 py-3 ${isToday ? "bg-amber-50" : ""}`}>
+                  {/* Date block */}
+                  <div className="flex w-12 flex-none flex-col items-center justify-center rounded-lg py-1.5" style={{ background: isToday ? "#163F87" : "#EBF0FA" }}>
+                    <span className="text-[10px] font-semibold uppercase" style={{ color: isToday ? "rgba(255,255,255,0.7)" : "#163F87" }}>{WD_SHORT[d.getDay()]}</span>
+                    <span className="text-xl font-bold leading-tight" style={{ color: isToday ? "#fff" : "#163F87" }}>{String(d.getDate()).padStart(2, "0")}</span>
+                    <span className="text-[10px]" style={{ color: isToday ? "rgba(255,255,255,0.7)" : "#163F87" }}>{MONTHS_FR[d.getMonth()].slice(0, 3)}</span>
+                  </div>
+                  {/* Content */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-sm font-semibold text-slate-800">{ev.title}</span>
+                      {ev.time && <span className="text-xs tabular-nums text-slate-400">{ev.time.replace(":", "h")}</span>}
+                      {isToday && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: "#163F87" }}>Aujourd'hui</span>}
+                    </div>
+                    {ev.instructions && <p className="mt-1 text-xs leading-relaxed text-slate-500">{ev.instructions}</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+    <div className="grid gap-6 lg:grid-cols-2">
       <Card title={`Mon planning — ${monthLabel}`} subtitle={`${session.name} · ${myDays.length} jour(s) travaillé(s)`}>
-        <div className="space-y-1">
-          {myDays.map((d) => {
-            const c = assignments[me.id][keyOf(d)];
-const s = ALL[normalizeType(c.type)];
-            return (
-              <div key={keyOf(d)} className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50/60 px-2 py-1.5">
-                <span className="w-20 flex-none text-xs font-medium text-slate-500">{WD_SHORT[d.getDay()]} {String(d.getDate()).padStart(2, "0")}/{String(d.getMonth() + 1).padStart(2, "0")}</span>
-                <span className="flex h-6 items-center rounded px-2 text-xs font-semibold" style={{ background: s?.bg, color: s?.fg }}>{s?.label || normalizeType(c.type)}
-</span>
-                {c.tag && <span className="text-xs" style={{ color: c.tag === "VR" ? "#7C3AED" : "#0891B2" }}>{c.tag === "VR" ? "veille de repos" : "lendemain de repos"}</span>}
-                {c.ot > 0 && <span className="ml-auto flex-none rounded px-1.5 py-0.5 text-xs font-semibold text-white" style={{ background: "#DC2626" }}>+{formatH(c.ot)}</span>}
+        {/* Synthèse mensuelle */}
+        {myDays.length > 0 && (
+          <div className="mb-4 grid grid-cols-3 divide-x divide-slate-100 rounded-xl bg-slate-50 py-3">
+            <div className="px-3 text-center">
+              <div className="text-lg font-bold text-slate-700">{myDays.length}</div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">jours</div>
+            </div>
+            <div className="px-3 text-center">
+              <div className="text-lg font-bold text-slate-700">{formatH(totalHours)}</div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">heures totales</div>
+            </div>
+            <div className="px-3 text-center">
+              <div className={`text-lg font-bold ${totalOT > 0 ? "text-red-500" : "text-slate-300"}`}>{totalOT > 0 ? `+${formatH(totalOT)}` : "—"}</div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-400">heures sup</div>
+            </div>
+          </div>
+        )}
+
+        {/* Planning par semaine */}
+        <div className="space-y-4">
+          {weekGroups.map(({ weekKey, weekLabel, days, totalH }) => (
+            <div key={weekKey}>
+              <div className="mb-1.5 flex items-center justify-between border-b border-slate-100 pb-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{weekLabel}</span>
+                <span className="text-[11px] font-semibold text-slate-500">{formatH(totalH)}</span>
               </div>
-            );
-          })}
+              <div className="space-y-1">
+                {days.map((d) => {
+                  const k = keyOf(d);
+                  const c = assignments[me.id][k];
+                  const s = ALL[normalizeType(c.type)];
+                  const isOpen = expandedDay === k;
+                  const myPresent = s?.present || [];
+                  const colleagues = agents
+                    .filter((a) => {
+                      if (a.id === me.id) return false;
+                      const cc = assignments[a.id]?.[k];
+                      return cc && !["R", "RC", "IN"].includes(normalizeType(cc.type));
+                    })
+                    .map((a) => {
+                      const cc = assignments[a.id][k];
+                      const sh = ALL[normalizeType(cc.type)];
+                      const sharedHours = (sh?.present || []).filter((h) => myPresent.includes(h)).length;
+                      const overlap = sharedHours >= 2;
+                      return { agent: a, shift: sh, overlap };
+                    })
+                    .sort((a, b) => (a.shift?.code || "").localeCompare(b.shift?.code || ""));
+                  const withMe = colleagues.filter((c) => c.overlap);
+                  const others = colleagues.filter((c) => !c.overlap);
+                  return (
+                    <div key={k} className={`overflow-hidden rounded-lg border shadow-sm transition-all ${isOpen ? "border-slate-200" : "border-slate-100"}`}>
+                      <button
+                        onClick={() => setExpandedDay(isOpen ? null : k)}
+                        className="flex w-full items-center gap-3 bg-white px-3 py-2.5 text-left transition-colors hover:bg-slate-50"
+                      >
+                        {/* Date */}
+                        <div className="w-10 flex-none text-center">
+                          <div className="text-[10px] font-medium uppercase text-slate-400">{WD_SHORT[d.getDay()]}</div>
+                          <div className="text-xl font-bold leading-tight text-slate-700">{String(d.getDate()).padStart(2, "0")}</div>
+                        </div>
+                        {/* Badge type */}
+                        <span className="flex h-7 w-9 flex-none items-center justify-center rounded-md text-xs font-bold" style={{ background: s?.bg, color: s?.fg }}>{s?.code || normalizeType(c.type)}</span>
+                        {/* Label + plage horaire */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1">
+                            <span className="text-sm font-semibold text-slate-700">{s?.label}</span>
+                            {c.tag && <span className="text-[10px] italic text-slate-400">{c.tag === "VR" ? "· veille de repos" : "· lendemain de repos"}</span>}
+                          </div>
+                          {s?.time && <div className="mt-0.5 text-sm tabular-nums text-slate-500">{s.time}</div>}
+                        </div>
+                        {/* Heures + chevron */}
+                        <div className="flex flex-none items-center gap-2">
+                          <div className="text-right">
+                            {(s?.hours ?? 0) > 0 && (
+                              <span className="rounded-md px-2 py-1 text-sm font-bold tabular-nums" style={{ background: s?.bg, color: s?.fg }}>{formatH(s.hours)}</span>
+                            )}
+                            {c.ot > 0 && <div className="mt-1 text-[11px] font-semibold text-red-500">+{formatH(c.ot)}</div>}
+                          </div>
+                          <ChevronRight size={14} className={`flex-none text-slate-300 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div className="border-t border-slate-100 bg-slate-50 px-3 py-3">
+                          {colleagues.length === 0 ? (
+                            <p className="text-xs text-slate-400">Aucun collègue planifié.</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {withMe.length > 0 && (
+                                <div>
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Avec moi</p>
+                                  <div className="space-y-1.5">
+                                    {withMe.map(({ agent, shift }) => (
+                                      <div key={agent.id} className="flex items-center gap-2.5 rounded-md bg-white px-2 py-1.5">
+                                        <span className="flex h-5 w-8 flex-none items-center justify-center rounded text-[11px] font-bold" style={{ background: shift?.bg, color: shift?.fg }}>{shift?.code}</span>
+                                        <span className="flex items-center gap-1 flex-1 text-sm font-medium text-slate-700"><RoleMark role={agent.role} />{agent.name}</span>
+                                        {shift?.time && <span className="text-[11px] tabular-nums text-slate-400">{shift.time}</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {others.length > 0 && (
+                                <div>
+                                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Autre demi-journée</p>
+                                  <div className="space-y-1.5">
+                                    {others.map(({ agent, shift }) => (
+                                      <div key={agent.id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5 opacity-60">
+                                        <span className="flex h-5 w-8 flex-none items-center justify-center rounded text-[11px] font-bold" style={{ background: shift?.bg, color: shift?.fg }}>{shift?.code}</span>
+                                        <span className="flex items-center gap-1 flex-1 text-sm text-slate-500"><RoleMark role={agent.role} />{agent.name}</span>
+                                        {shift?.time && <span className="text-[11px] tabular-nums text-slate-400">{shift.time}</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
           {myDays.length === 0 && <p className="text-xs text-slate-400">Aucun planning publié pour ce mois.</p>}
         </div>
       </Card>
@@ -2161,11 +2679,19 @@ const s = ALL[normalizeType(c.type)];
               <label className="mt-3 block text-xs font-medium text-slate-500">Avec</label>
               <select value={swapTo} onChange={(e) => setSwapTo(e.target.value)} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm">
                 <option value="">— Choisir un collègue —</option>
-                {partners.map((a) => <option key={a.id} value={a.name}>{a.name}</option>)}
+                {partners.map((a) => <option key={a.id} value={a.name}><RoleMark role={a.role} />{a.name}</option>)}
               </select>
-              {partners.length === 0 && <p className="mt-1 text-xs text-amber-600">Aucun collègue disponible sur l'autre demi-journée ce jour-là.</p>}
+              {partners.length === 0 && <p className="mt-1 text-xs text-amber-600">Aucun collègue du même groupe disponible sur l'autre demi-journée ce jour-là.</p>}
             </>
           )}
+          <label className="mt-3 block text-xs font-medium text-slate-500">Raison <span className="font-normal text-slate-400">(optionnel)</span></label>
+          <textarea
+            value={swapReason}
+            onChange={(e) => setSwapReason(e.target.value)}
+            placeholder="ex. formation, rendez-vous personnel..."
+            rows={2}
+            className="mt-1 w-full resize-none rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm"
+          />
           <button onClick={submitSwap} disabled={!swapDay || !swapTo} className="mt-3 flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white disabled:opacity-40" style={{ background: "#163F87" }}>
             <Send size={15} /> Envoyer la demande
           </button>
@@ -2192,12 +2718,96 @@ const s = ALL[normalizeType(c.type)];
         </Card>
       </div>
     </div>
+    </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
 /*  Onglets administrateur : Comptes & Demandes                        */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/*  Onglet Événements (admin)                                          */
+/* ------------------------------------------------------------------ */
+function EvenementsTab({ happenings, addHappening, updateHappening, removeHappening }) {
+  const sorted = [...happenings].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const today = keyOf(new Date());
+  return (
+    <div className="mx-auto max-w-3xl space-y-4">
+      <Card
+        title="Événements Handiplage"
+        subtitle="Ces informations seront visibles par tous les membres de l'équipe."
+        action={
+          <button onClick={addHappening} className="flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
+            <Plus size={13} /> Ajouter
+          </button>
+        }
+      >
+        {happenings.length === 0 && (
+          <p className="py-4 text-center text-sm text-slate-400">Aucun événement. Cliquez sur « Ajouter » pour créer le premier.</p>
+        )}
+        <div className="space-y-3">
+          {sorted.map((ev) => {
+            const past = ev.date < today;
+            return (
+              <div key={ev.id} className={`rounded-xl border p-4 ${past ? "border-slate-100 bg-slate-50 opacity-60" : "border-brand/20 bg-white shadow-sm"}`}>
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="flex h-10 w-10 flex-none items-center justify-center rounded-lg" style={{ background: past ? "#e2e8f0" : "#EBF0FA", color: past ? "#94a3b8" : "#163F87" }}>
+                    <Flag size={18} />
+                  </div>
+                  <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
+                    <div>
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Titre</label>
+                      <input
+                        value={ev.title}
+                        onChange={(e) => updateHappening(ev.id, { title: e.target.value })}
+                        placeholder="Titre de l'événement"
+                        className="mt-0.5 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Date</label>
+                        <input
+                          type="date"
+                          value={ev.date}
+                          onChange={(e) => updateHappening(ev.id, { date: e.target.value })}
+                          className="mt-0.5 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        />
+                      </div>
+                      <div className="w-24 flex-none">
+                        <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Heure</label>
+                        <input
+                          type="time"
+                          value={ev.time}
+                          onChange={(e) => updateHappening(ev.id, { time: e.target.value })}
+                          className="mt-0.5 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        />
+                      </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Consignes</label>
+                      <textarea
+                        value={ev.instructions}
+                        onChange={(e) => updateHappening(ev.id, { instructions: e.target.value })}
+                        placeholder="Instructions, informations pratiques..."
+                        rows={2}
+                        className="mt-0.5 w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      />
+                    </div>
+                  </div>
+                  <button onClick={() => removeHappening(ev.id)} className="flex-none rounded-md p-1.5 text-slate-300 hover:bg-red-50 hover:text-red-500">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 function ComptesTab({ accounts, addAccount, updateAccount, removeAccount, createTeamAccounts }) {
   return (
@@ -2231,23 +2841,35 @@ function ComptesTab({ accounts, addAccount, updateAccount, removeAccount, create
 function DemandesTab({ requests, decideRequest }) {
   const pending = requests.filter((r) => r.status === "pending");
   const done = requests.filter((r) => r.status !== "pending").sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const [replies, setReplies] = useState({});
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <Card title="Demandes en attente" subtitle="Validez ou refusez les demandes du personnel. Une validation applique automatiquement le changement au planning.">
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {pending.length === 0 && <p className="text-xs text-slate-400">Aucune demande en attente.</p>}
           {pending.map((r) => {
             const { icon: Icon, title, detail } = reqLabel(r);
             return (
-              <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-md border border-slate-100 bg-white px-2 py-2">
-                <Icon size={15} className="flex-none text-slate-400" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-700">{r.fromName} — {title}</p>
-                  <p className="text-xs text-slate-400">{detail}</p>
+              <div key={r.id} className="rounded-md border border-slate-100 bg-white px-3 py-2.5">
+                <div className="flex flex-wrap items-start gap-2">
+                  <Icon size={15} className="mt-0.5 flex-none text-slate-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-700">{r.fromName} — {title}</p>
+                    <p className="text-xs text-slate-400">{detail}</p>
+                  </div>
                 </div>
-                <div className="ml-auto flex gap-1.5">
-                  <button onClick={() => decideRequest(r, true)} className="flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-white" style={{ background: "#15803D" }}><Check size={13} /> Accepter</button>
-                  <button onClick={() => decideRequest(r, false)} className="flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"><X size={13} /> Refuser</button>
+                <div className="mt-2.5 flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <textarea
+                    value={replies[r.id] || ""}
+                    onChange={(e) => setReplies((p) => ({ ...p, [r.id]: e.target.value }))}
+                    placeholder="Message de réponse (optionnel)..."
+                    rows={1}
+                    className="min-h-[32px] w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-1 focus:ring-brand/30"
+                  />
+                  <div className="flex flex-none gap-1.5">
+                    <button onClick={() => decideRequest(r, true, replies[r.id])} className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-white" style={{ background: "#15803D" }}><Check size={13} /> Accepter</button>
+                    <button onClick={() => decideRequest(r, false, replies[r.id])} className="flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"><X size={13} /> Refuser</button>
+                  </div>
                 </div>
               </div>
             );

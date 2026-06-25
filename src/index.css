@@ -1,3 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dark mode */
+html.dark-mode { background: #0f172a; color-scheme: dark; }
+html.dark-mode body { background: #0f172a; }
+html.dark-mode .bg-white { background-color: #1e293b !important; }
+html.dark-mode .bg-slate-50 { background-color: #0f172a !important; }
+html.dark-mode .bg-slate-100 { background-color: #1e293b !important; }
+html.dark-mode .hover\:bg-slate-50:hover { background-color: #263346 !important; }
+html.dark-mode .border-slate-100 { border-color: #334155 !important; }
+html.dark-mode .border-slate-200 { border-color: #475569 !important; }
+html.dark-mode .divide-slate-100 > * + * { border-color: #334155 !important; }
+html.dark-mode .text-slate-800 { color: #e2e8f0 !important; }
+html.dark-mode .text-slate-700 { color: #cbd5e1 !important; }
+html.dark-mode .text-slate-600 { color: #94a3b8 !important; }
+html.dark-mode .text-slate-500 { color: #64748b !important; }
+html.dark-mode .text-slate-400 { color: #475569 !important; }
+html.dark-mode .text-slate-300 { color: #334155 !important; }
+html.dark-mode input,
+html.dark-mode select,
+html.dark-mode textarea { background-color: #334155 !important; color: #e2e8f0 !important; border-color: #475569 !important; }
+html.dark-mode input::placeholder,
+html.dark-mode textarea::placeholder { color: #64748b !important; }
+html.dark-mode .shadow-sm { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
+html.dark-mode .shadow-md { box-shadow: 0 4px 8px rgba(0,0,0,0.6) !important; }
