@@ -2990,8 +2990,8 @@ function HistoriqueTab({ archivedMonths, agents, monthTeams }) {
                           >
                             {sh && !isRest ? (
                               <span
-                                className="inline-flex items-center justify-center rounded font-bold text-white"
-                                style={{ background: sh.color, fontSize: "10px", padding: "2px 5px" }}
+                                className="inline-flex items-center justify-center rounded font-bold"
+                                style={{ background: sh.bg, color: sh.fg, fontSize: "10px", padding: "2px 5px" }}
                               >
                                 {c.type}
                               </span>
@@ -3010,9 +3010,9 @@ function HistoriqueTab({ archivedMonths, agents, monthTeams }) {
           {/* Légende */}
           <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-2.5 bg-slate-50">
             {Object.entries(ALL).filter(([k]) => k !== "R").map(([k, v]) => (
-              <div key={k} className="flex items-center gap-1">
-                <span className="inline-flex items-center justify-center rounded font-bold text-white" style={{ background: v.color, fontSize: "10px", padding: "2px 5px" }}>{k}</span>
-                <span className="text-xs text-slate-500">{v.label || k}</span>
+              <div key={k} className="flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center rounded font-bold" style={{ background: v.bg, color: v.fg, fontSize: "10px", padding: "2px 6px" }}>{k}</span>
+                <span className="text-xs text-slate-500">{v.label}</span>
               </div>
             ))}
           </div>
