@@ -1,4 +1,5 @@
-﻿import React, { useState, useMemo, useRef, useEffect } from "react";
+﻿import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { supabase, PLANNING_ID } from "./src/supabase.js";
 import {
   Users, CalendarDays, LayoutGrid, BarChart3, Plus, Trash2, Wand2,
   Download, Upload, Printer, X, Clock, ChevronLeft, ChevronRight, Crown, FileText,
@@ -161,6 +162,32 @@ export default function App() {
   const updateHappening = (id, patch) => setHappenings((h) => h.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   const removeHappening = (id) => setHappenings((h) => h.filter((e) => e.id !== id));
   const [archivedMonths, setArchivedMonths] = useState([]);
+  const [dbReady, setDbReady] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("idle"); // "idle"|"saving"|"saved"|"error"
+
+  const restoreState = useCallback((d) => {
+    if (d.seasonOpen) setSeasonOpen(d.seasonOpen);
+    if (d.seasonClose) setSeasonClose(d.seasonClose);
+    if (d.monthTeams) setMonthTeams(d.monthTeams);
+    if (d.minEffectif) setMinEffectif(d.minEffectif);
+    if (d.minHalf) setMinHalf(d.minHalf);
+    if (d.events) setEvents(d.events);
+    if (d.assignments) setAssignments(cleanAssignments(d.assignments));
+    if (d.accounts) setAccounts(d.accounts);
+    if (d.requests) setRequests(d.requests);
+    if (d.happenings) setHappenings(d.happenings);
+    if (d.archivedMonths) setArchivedMonths(d.archivedMonths);
+  }, []);
+
+  useEffect(() => {
+    supabase.from("planning_state").select("data").eq("id", PLANNING_ID).maybeSingle()
+      .then(({ data, error }) => {
+        if (!error && data?.data) restoreState(data.data);
+        setDbReady(true);
+      })
+      .catch(() => setDbReady(true));
+  }, [restoreState]);
+
   const validateMonth = (monthKey, label) => {
     const fullLabel = capMonth(Number(monthKey.split("-")[1]) - 1) + " " + monthKey.split("-")[0];
     if (!window.confirm(`Valider ${fullLabel} ? Cette version sera archivée.`)) return;
@@ -452,6 +479,27 @@ if (s && SHIFTS[type]) {
 
   const hasPlan = agents.some((a) => assignments[a.id] && Object.keys(assignments[a.id]).length);
 
+  const stateSnapshot = useMemo(() => ({
+    seasonOpen, seasonClose, monthTeams, minEffectif, minHalf,
+    events, assignments, accounts, requests, happenings, archivedMonths,
+  }), [seasonOpen, seasonClose, monthTeams, minEffectif, minHalf,
+       events, assignments, accounts, requests, happenings, archivedMonths]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSaveStatus("saving");
+    const t = setTimeout(async () => {
+      const { error } = await supabase.from("planning_state").upsert({
+        id: PLANNING_ID,
+        data: stateSnapshot,
+        updated_at: new Date().toISOString(),
+      });
+      setSaveStatus(error ? "error" : "saved");
+      if (!error) setTimeout(() => setSaveStatus("idle"), 3000);
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [stateSnapshot, dbReady]);
+
   const isAdmin = session?.role === "admin";
   const monthLabel = currentMonth ? capMonth(Number(currentMonth.split("-")[1]) - 1) : "";
   const pendingCount = requests.filter((r) => r.status === "pending").length;
@@ -531,6 +579,15 @@ if (s && SHIFTS[type]) {
 
   /* ---------------------------------------------------------------- */
   
+  if (!dbReady) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 border-4 border-[#163F87] border-t-transparent rounded-full animate-spin" />
+        <p className="text-slate-500 text-sm font-medium">Chargement du planning…</p>
+      </div>
+    );
+  }
+
   if (!session) {
     return <PortalScreen accounts={accounts} onLogin={setSession} />;
   }
@@ -806,6 +863,22 @@ if (s && SHIFTS[type]) {
             <h1 className="truncate text-sm font-semibold leading-none tracking-tight text-white">Planning Équipe</h1>
             <p className="mt-0.5 hidden text-xs sm:block" style={{ color: "rgba(255,255,255,0.6)" }}>Couverture horaire &amp; suivi des heures</p>
           </div>
+          {saveStatus === "saving" && (
+            <span className="hidden sm:flex items-center gap-1 text-xs text-white/60 animate-pulse">
+              <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0"/></svg>
+              Sync…
+            </span>
+          )}
+          {saveStatus === "saved" && (
+            <span className="hidden sm:flex items-center gap-1 text-xs text-emerald-300">
+              ✓ Sauvegardé
+            </span>
+          )}
+          {saveStatus === "error" && (
+            <span className="hidden sm:flex items-center gap-1 text-xs text-orange-300">
+              ⚠ Erreur sync
+            </span>
+          )}
           {isAdmin && (
             <>
               <button onClick={() => fileRef.current?.click()} title="Importer" className="flex flex-none items-center gap-1.5 rounded-md p-1.5 text-xs font-medium text-white/80 hover:bg-white/10 sm:px-2.5" style={{ border: "1px solid rgba(255,255,255,0.25)" }}>
