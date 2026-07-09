@@ -162,7 +162,9 @@ export default function App() {
   const removeHappening = (id) => setHappenings((h) => h.filter((e) => e.id !== id));
   const [archivedMonths, setArchivedMonths] = useState([]);
   const validateMonth = (monthKey, label) => {
-    if (!window.confirm(`Valider ${label} ? Cette version sera archivée.`)) return;
+    const fullLabel = capMonth(Number(monthKey.split("-")[1]) - 1) + " " + monthKey.split("-")[0];
+    if (!window.confirm(`Valider ${fullLabel} ? Cette version sera archivée.`)) return;
+    label = fullLabel;
     const mDates = monthDates(monthKey, seasonOpen, seasonClose);
     const snap = {};
     mDates.forEach((d) => {
@@ -907,7 +909,7 @@ if (s && SHIFTS[type]) {
             {tab === "heures" && <HeuresTab {...{ totals, maxOT, hasPlan, agents, dates, assignments, setAssignments }} />}
             {tab === "export" && <ExportTab {...{ agents, dates, assignments, minHalf, totals, hasPlan, events }} />}
             {tab === "evenements" && <EvenementsTab {...{ happenings, addHappening, updateHappening, removeHappening }} />}
-            {tab === "historique" && <HistoriqueTab {...{ archivedMonths, agents }} />}
+            {tab === "historique" && <HistoriqueTab {...{ archivedMonths, agents, monthTeams }} />}
             {tab === "comptes" && <ComptesTab {...{ accounts, addAccount, updateAccount, removeAccount, createTeamAccounts }} />}
             {tab === "demandes" && <DemandesTab {...{ requests, decideRequest }} />}
           </>
@@ -2893,92 +2895,176 @@ function UserApp({ session, agents, dates, assignments, currentMonth, monthLabel
 /* ------------------------------------------------------------------ */
 /*  Onglet Historique (admin)                                          */
 /* ------------------------------------------------------------------ */
-function HistoriqueTab({ archivedMonths, agents }) {
+function HistoriqueTab({ archivedMonths, agents, monthTeams }) {
   const [viewing, setViewing] = useState(null);
   const sorted = [...archivedMonths].sort((a, b) => b.monthKey.localeCompare(a.monthKey));
   const arc = viewing ? archivedMonths.find((a) => a.monthKey === viewing) : null;
 
   if (arc) {
+    // Agents du mois archivé (priorité sur l'équipe du mois en cours)
+    const arcAgents = (monthTeams?.[arc.monthKey] || []).length > 0
+      ? monthTeams[arc.monthKey]
+      : agents;
+
+    // Toutes les dates présentes dans l'archive
     const mDates = [...new Set(
       Object.values(arc.assignments).flatMap((byDay) => Object.keys(byDay))
     )].sort();
+
+    const hasData = mDates.length > 0 && arcAgents.some((a) =>
+      mDates.some((dk) => arc.assignments[a.id]?.[dk])
+    );
+
     return (
-      <div className="mx-auto max-w-5xl space-y-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setViewing(null)} className="flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+      <div className="mx-auto max-w-7xl space-y-4">
+        {/* Header */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setViewing(null)}
+            className="flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          >
             ← Retour
           </button>
-          <h2 className="text-base font-semibold text-slate-800">{arc.label} — validé le {arc.validatedAt?.split("-").reverse().join("/")}</h2>
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">{arc.label}</h2>
+            <p className="text-xs text-slate-400">Validé le {arc.validatedAt?.split("-").reverse().join("/")} · {arcAgents.length} agents</p>
+          </div>
         </div>
-        <Card title={`Planning archivé — ${arc.label}`}>
+
+        {!hasData && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            Ce planning a été validé sans données de shifts. Générez le planning du mois puis re-validez-le pour l'archiver.
+          </div>
+        )}
+
+        {/* Grille */}
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
+            <table className="border-collapse text-xs" style={{ minWidth: "100%" }}>
               <thead>
-                <tr>
-                  <th className="sticky left-0 bg-white px-3 py-2 text-left font-semibold text-slate-500 border-b border-slate-200">Agent</th>
+                <tr style={{ background: "#163F87" }}>
+                  <th className="sticky left-0 z-10 px-4 py-3 text-left text-xs font-semibold text-white/80 whitespace-nowrap" style={{ background: "#163F87", minWidth: "160px" }}>
+                    Agent
+                  </th>
                   {mDates.map((dk) => {
                     const d = parseDate(dk);
+                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                     return (
-                      <th key={dk} className="border-b border-slate-200 px-1 py-2 text-center font-medium text-slate-500">
-                        <div>{WD_SHORT[d.getDay()]}</div>
-                        <div className="text-slate-400">{String(d.getDate()).padStart(2,"0")}/{String(d.getMonth()+1).padStart(2,"0")}</div>
+                      <th
+                        key={dk}
+                        className="px-1 py-2 text-center font-medium"
+                        style={{ background: isWeekend ? "rgba(0,0,0,0.18)" : "transparent", color: isWeekend ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.85)", minWidth: "36px" }}
+                      >
+                        <div className="text-[10px] uppercase tracking-wide">{WD_SHORT[d.getDay()]}</div>
+                        <div className="text-sm font-bold leading-none mt-0.5">{d.getDate()}</div>
                       </th>
                     );
                   })}
                 </tr>
               </thead>
               <tbody>
-                {agents.map((a) => (
-                  <tr key={a.id} className="hover:bg-slate-50">
-                    <td className="sticky left-0 bg-white border-b border-slate-100 px-3 py-1.5 font-medium text-slate-700 whitespace-nowrap">{a.name}</td>
-                    {mDates.map((dk) => {
-                      const c = arc.assignments[a.id]?.[dk];
-                      const sh = c ? ALL[normalizeType(c.type)] : null;
-                      return (
-                        <td key={dk} className="border-b border-slate-100 px-0.5 py-1 text-center">
-                          {sh ? (
-                            <span className="inline-block rounded px-1.5 py-0.5 text-xs font-semibold text-white" style={{ background: sh.color }}>
-                              {c.type}
-                            </span>
-                          ) : (
-                            <span className="text-slate-200">—</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                {arcAgents.map((a, idx) => {
+                  const rowBg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+                  return (
+                    <tr key={a.id} style={{ background: rowBg }}>
+                      <td
+                        className="sticky left-0 z-10 border-b border-slate-100 px-4 py-2 whitespace-nowrap"
+                        style={{ background: rowBg }}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-slate-800">{a.name}</span>
+                          <RoleMark role={a.role} />
+                        </div>
+                      </td>
+                      {mDates.map((dk) => {
+                        const d = parseDate(dk);
+                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                        const c = arc.assignments[a.id]?.[dk];
+                        const sh = c ? ALL[normalizeType(c.type)] : null;
+                        const isRest = c?.type === "R" || c?.type === "IN";
+                        return (
+                          <td
+                            key={dk}
+                            className="border-b border-slate-100 p-0.5 text-center"
+                            style={{ background: isWeekend ? "#f1f5f9" : "transparent" }}
+                          >
+                            {sh && !isRest ? (
+                              <span
+                                className="inline-flex items-center justify-center rounded font-bold text-white"
+                                style={{ background: sh.color, fontSize: "10px", padding: "2px 5px" }}
+                              >
+                                {c.type}
+                              </span>
+                            ) : isRest ? (
+                              <span className="text-slate-300 text-[10px]">{c.type}</span>
+                            ) : null}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </Card>
+          {/* Légende */}
+          <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 px-4 py-2.5 bg-slate-50">
+            {Object.entries(ALL).filter(([k]) => k !== "R").map(([k, v]) => (
+              <div key={k} className="flex items-center gap-1">
+                <span className="inline-flex items-center justify-center rounded font-bold text-white" style={{ background: v.color, fontSize: "10px", padding: "2px 5px" }}>{k}</span>
+                <span className="text-xs text-slate-500">{v.label || k}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <Card title="Historique des plannings" subtitle="Plannings validés mois par mois.">
-        {sorted.length === 0 && (
-          <p className="text-sm text-slate-400">Aucun planning validé. Allez dans l'onglet Planning et cliquez « Valider [mois] ».</p>
-        )}
-        <div className="space-y-2">
-          {sorted.map((arc) => (
-            <div key={arc.monthKey} className="flex items-center justify-between rounded-md border border-slate-100 px-3 py-2.5">
-              <div className="flex items-center gap-3">
-                <Archive size={15} style={{ color: "#163F87" }} />
-                <div>
-                  <p className="text-sm font-medium text-slate-800">{arc.label}</p>
-                  <p className="text-xs text-slate-400">Validé le {arc.validatedAt?.split("-").reverse().join("/")}</p>
-                </div>
-              </div>
-              <button onClick={() => setViewing(arc.monthKey)} className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
-                Voir
-              </button>
-            </div>
-          ))}
+    <div className="mx-auto max-w-2xl space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3" style={{ background: "#EBF0FA" }}>
+          <Archive size={16} style={{ color: "#163F87" }} />
+          <span className="text-sm font-semibold" style={{ color: "#163F87" }}>Historique des plannings</span>
         </div>
-      </Card>
+        {sorted.length === 0 ? (
+          <div className="px-4 py-8 text-center">
+            <Archive size={32} className="mx-auto mb-3 text-slate-200" />
+            <p className="text-sm font-medium text-slate-500">Aucun planning validé</p>
+            <p className="mt-1 text-xs text-slate-400">Allez dans l'onglet <strong>Planning</strong> et cliquez « Valider [mois] » pour archiver un mois.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {sorted.map((arc) => {
+              const agentCount = Object.keys(arc.assignments).length;
+              const shiftCount = Object.values(arc.assignments).reduce((s, byDay) =>
+                s + Object.values(byDay).filter((c) => c.type !== "R").length, 0);
+              return (
+                <div key={arc.monthKey} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors">
+                  <div className="flex h-10 w-10 flex-none items-center justify-center rounded-lg" style={{ background: "#EBF0FA" }}>
+                    <Archive size={17} style={{ color: "#163F87" }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">{arc.label}</p>
+                    <p className="text-xs text-slate-400">
+                      Validé le {arc.validatedAt?.split("-").reverse().join("/")}
+                      {agentCount > 0 && ` · ${agentCount} agents · ${shiftCount} shifts`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setViewing(arc.monthKey)}
+                    className="flex-none rounded-md px-3 py-1.5 text-xs font-semibold text-white"
+                    style={{ background: "#163F87" }}
+                  >
+                    Voir →
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
