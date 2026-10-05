@@ -4,8 +4,12 @@ import {
   Users, CalendarDays, LayoutGrid, BarChart3, Plus, Trash2, Wand2,
   Download, Upload, Printer, X, Clock, ChevronLeft, ChevronRight, Crown, FileText,
   ArrowLeftRight, Lock, LogOut, ShieldCheck, Inbox, Send, Check, KeyRound,
-  Moon, Sun, Mail, UserCircle2, Flag, AlertCircle, Archive,
+  Moon, Sun, Mail, UserCircle2, Flag, AlertCircle, Archive, IdCard, ExternalLink,
 } from "lucide-react";
+
+// Outil badges (public/badges) : il lit l'équipe du planning dans ce localStorage (même origine)
+const ROSTER_KEY = "handiplage:planning-roster";
+const BADGES_URL = `${import.meta.env.BASE_URL}badges/index.html`;
 
 const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
@@ -479,6 +483,14 @@ if (s && SHIFTS[type]) {
 
   const hasPlan = agents.some((a) => assignments[a.id] && Object.keys(assignments[a.id]).length);
 
+  /* ----- équipe partagée avec l'outil badges (mois affiché d'abord, puis le reste de la saison) ----- */
+  useEffect(() => {
+    const people = [...agents, ...Object.entries(monthTeams).filter(([mk]) => mk !== currentMonth).flatMap(([, t]) => t)]
+      .map(({ name, role }) => ({ name, role }));
+    try { localStorage.setItem(ROSTER_KEY, JSON.stringify({ updatedAt: new Date().toISOString(), people })); } catch {}
+    document.querySelectorAll("iframe[data-badges]").forEach((f) => f.contentWindow?.postMessage({ type: "handiplage:roster" }, location.origin));
+  }, [monthTeams, currentMonth]);
+
   const stateSnapshot = useMemo(() => ({
     seasonOpen, seasonClose, monthTeams, minEffectif, minHalf,
     events, assignments, accounts, requests, happenings, archivedMonths,
@@ -924,6 +936,7 @@ if (s && SHIFTS[type]) {
             ["export", "Export", FileText],
             ["evenements", "Événements", Flag],
             ["historique", "Historique", Archive],
+            ["badges", "Badges", IdCard],
             ["comptes", "Comptes", KeyRound],
             ["demandes", "Demandes", Inbox],
           ].map(([id, label, Icon]) => (
@@ -983,6 +996,7 @@ if (s && SHIFTS[type]) {
             {tab === "export" && <ExportTab {...{ agents, dates, assignments, minHalf, totals, hasPlan, events }} />}
             {tab === "evenements" && <EvenementsTab {...{ happenings, addHappening, updateHappening, removeHappening }} />}
             {tab === "historique" && <HistoriqueTab {...{ archivedMonths, agents, monthTeams }} />}
+            {tab === "badges" && <BadgesTab />}
             {tab === "comptes" && <ComptesTab {...{ accounts, addAccount, updateAccount, removeAccount, createTeamAccounts }} />}
             {tab === "demandes" && <DemandesTab {...{ requests, decideRequest }} />}
           </>
@@ -1120,6 +1134,28 @@ function EquipeTab({ agents, addAgent, removeAgent, updateAgent, minHalf, setMin
           </div>
         </Card>
       </section>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Onglet Badges (outil autonome public/badges, nourri par l'équipe)  */
+/* ------------------------------------------------------------------ */
+function BadgesTab() {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-slate-500">
+          Les noms saisis dans <span className="font-semibold">Équipe</span> sont proposés automatiquement : tapez un prénom ou cliquez « Ajouter ».
+        </p>
+        <a href={BADGES_URL} target="_blank" rel="noreferrer"
+          className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
+          <ExternalLink size={13} /> Ouvrir en plein écran
+        </a>
+      </div>
+      <iframe data-badges src={BADGES_URL} title="Badges Handiplage"
+        className="block w-full rounded-lg border border-slate-200 bg-white shadow-sm"
+        style={{ height: "calc(100dvh - 210px)", minHeight: 620 }} />
     </div>
   );
 }
