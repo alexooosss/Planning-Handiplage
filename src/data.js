@@ -129,7 +129,7 @@ export function buildPlanning(team, mDates, minHalf = 4, seed, prior = {}) {
   group.forEach((a) => {
     const neutral = mDates.filter((d) => { const c = next[a.id][keyOf(d)]; return c && (c.type === "M" || c.type === "AM") && prefAt(a, d) == null; });
     const picked = shuffle(neutral).slice(0, Math.min(neutral.length, target[a.id]));
-    picked.forEach((d) => { next[a.id][keyOf(d)].type = "CP"; });
+    picked.forEach((d) => { const c = next[a.id][keyOf(d)]; c.half = c.type; c.type = "CP"; });
     H[a.id] += picked.length * (SHIFTS.CP.hours - SHIFTS.M.hours);
   });
   const coversH = (id, dk, h) => { const c = next[id][dk]; return c.type === h || c.type === "CP"; };
@@ -151,6 +151,62 @@ export function buildPlanning(team, mDates, minHalf = 4, seed, prior = {}) {
       }
     });
   });
+  // Rééquilibrage : tant qu'un écart dépasse un coupé (4h05), on transfère un coupé, le même jour,
+  // de la personne la plus chargée vers une moins chargée qui fait la même demi-journée.
+  // L'effectif matin / après-midi ne bouge pas ; coupure de 48 h et règle des chef·fes respectées.
+  const K = (id) => H[id] * (byId[id].role === "chef" ? 0.95 : 1);
+  const people = team.filter((a) => a.role !== "adm");
+  const coupesPrevus = (id) => mDates.filter((d) => { const c = next[id][keyOf(d)]; return c.type === "CP" && !c.comp; }).length;
+  const chefsOk = (dk) => { const t = chefList.map((c) => next[c.id][dk]?.type).filter((x) => x === "M" || x === "AM"); return !(chefList.length === 2 && t.length === 2 && t[0] === t[1]); };
+  const tryMove = (hi, lo) => {
+    for (const d of shuffle(mDates)) {
+      const dk = keyOf(d), ch = next[hi][dk], cl = next[lo][dk];
+      if (ch.type !== "CP" || cl.tag || (cl.type !== "M" && cl.type !== "AM")) continue;
+      const half = ch.comp ? other(ch.compHalf) : ch.half;
+      if (half !== cl.type) continue;
+      if (!ch.comp && coupesPrevus(lo) >= maxC) continue; // jamais plus de 2 à 3 coupés prévus par mois
+      const before = [{ ...ch }, { ...cl }];
+      if (ch.comp) {
+        next[lo][dk] = { ...cl, type: "CP", tag: null, comp: true, compHalf: ch.compHalf, ot: (cl.ot || 0) + OT_ADD };
+        next[hi][dk] = { ...ch, type: half, comp: false, compHalf: null, tag: null, ot: Math.max(0, (ch.ot || 0) - OT_ADD) };
+      } else {
+        next[lo][dk] = { ...cl, type: "CP", half: cl.type, tag: null };
+        next[hi][dk] = { ...ch, type: half, half: undefined, tag: null };
+      }
+      if (!chefsOk(dk)) { next[hi][dk] = before[0]; next[lo][dk] = before[1]; continue; }
+      H[hi] -= OT_ADD; H[lo] += OT_ADD;
+      return true;
+    }
+    // Sinon, coupé prévu déplacé d'un jour à l'autre, si le jour d'origine garde au moins le minimum
+    if (coupesPrevus(lo) >= maxC) return false;
+    const covers = (dk, h) => team.filter((a) => { const t = next[a.id][dk]?.type; return t === h || t === "CP"; }).length;
+    const fromDays = shuffle(mDates).filter((d) => { const c = next[hi][keyOf(d)]; return c.type === "CP" && !c.comp && covers(keyOf(d), other(c.half)) > minHalf; });
+    const toDays = shuffle(mDates).filter((d) => { const c = next[lo][keyOf(d)]; return (c.type === "M" || c.type === "AM") && !c.tag && prefAt(byId[lo], d) == null; });
+    for (const dh of fromDays) {
+      for (const dl of toDays) {
+        const kh = keyOf(dh), kl = keyOf(dl);
+        if (kh === kl) continue;
+        const ch = next[hi][kh], cl = next[lo][kl];
+        next[hi][kh] = { ...ch, type: ch.half, half: undefined, tag: null };
+        next[lo][kl] = { ...cl, type: "CP", half: cl.type, tag: null };
+        if (chefsOk(kh) && chefsOk(kl)) { H[hi] -= OT_ADD; H[lo] += OT_ADD; return true; }
+        next[hi][kh] = ch; next[lo][kl] = cl;
+      }
+    }
+    return false;
+  };
+  for (let guard = 0; guard < 300; guard++) {
+    const order = [...people].sort((x, y) => K(y.id) - K(x.id));
+    let moved = false;
+    for (let i = 0; i < order.length && !moved; i++) {
+      for (let j = order.length - 1; j > i && !moved; j--) {
+        if (K(order[i].id) - K(order[j].id) <= OT_ADD) break;
+        moved = tryMove(order[i].id, order[j].id);
+      }
+    }
+    if (!moved) break;
+  }
+  team.forEach((a) => mDates.forEach((d) => { const c = next[a.id][keyOf(d)]; if (c) delete c.half; }));
   return next;
 }
 
