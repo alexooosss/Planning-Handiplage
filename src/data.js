@@ -61,14 +61,21 @@ export const newAgent = () => ({ id: uid(), first: "", last: "", role: "agent", 
 /* ---------- Moteur de génération (règles identiques à l'ancien site) ---------- */
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
-export function buildPlanning(team, mDates, minHalf = 4, seed) {
+/**
+ * prior : heures déjà faites plus tôt dans la saison, par id de fiche du mois ({ id: heures }).
+ * Sert à équilibrer : repos en plus, coupés et compensations vont en priorité là où il faut.
+ */
+export function buildPlanning(team, mDates, minHalf = 4, seed, prior = {}) {
   if (!mDates.length || !team.length) return {};
   const rand = seed == null ? Math.random : rng(seed);
   const shuffle = (arr) => { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const chefList = team.filter((a) => a.role === "chef"), agentList = team.filter((a) => a.role === "agent");
   const byId = Object.fromEntries(team.map((a) => [a.id, a]));
   const startDate = mDates[0], offset = {};
-  shuffle(agentList).forEach((a, i) => { offset[a.id] = i % 6; });
+  const P = (id) => prior[id] || 0;
+  // Repos tous les 6 jours. Sur un mois incomplet certains ont un repos de plus :
+  // il revient à ceux qui ont le plus d'heures cumulées (décalage 0 = le plus de repos)
+  shuffle(agentList).sort((x, y) => P(y.id) - P(x.id)).forEach((a, i) => { offset[a.id] = i % 6; });
   const dayIndex = (date) => Math.round((date - startDate) / 86400000);
   const isRest = (a, date) => a.role === "chef" ? date.getDay() === a.restDay : a.role === "adm" ? date.getDay() === 3 || date.getDay() === 4 : (((dayIndex(date) - offset[a.id]) % 6) + 6) % 6 === 0;
   const prefAt = (a, date) => (isRest(a, addDays(date, 1)) ? "M" : isRest(a, addDays(date, -1)) ? "AM" : null);
@@ -110,14 +117,25 @@ export function buildPlanning(team, mDates, minHalf = 4, seed) {
       if (p === "M" && c.type === "M") c.tag = "VR"; else if (p === "AM" && c.type === "AM") c.tag = "LR";
     });
   });
-  [...agentList, ...chefList].forEach((a) => {
+  // Heures projetées de chacun : cumul de la saison + heures du mois après la répartition matin / après-midi
+  const H = {};
+  team.forEach((a) => { H[a.id] = P(a.id) + mDates.reduce((s, d) => s + (SHIFTS[next[a.id][keyOf(d)]?.type]?.hours || 0), 0); });
+  // Coupés prévus : 2 à 3 par mois complet comme avant, mais les coupés « en plus » vont aux moins chargés
+  const N = mDates.length, group = [...agentList, ...chefList];
+  const minC = Math.round((2 * N) / 28), maxC = Math.max(minC, Math.round((3 * N) / 28));
+  const extra = Math.round(((2.5 * N) / 28 - minC) * group.length);
+  const target = Object.fromEntries(group.map((a) => [a.id, minC]));
+  shuffle(group).sort((x, y) => H[x.id] - H[y.id]).slice(0, Math.max(0, extra)).forEach((a) => { target[a.id] = Math.min(maxC, target[a.id] + 1); });
+  group.forEach((a) => {
     const neutral = mDates.filter((d) => { const c = next[a.id][keyOf(d)]; return c && (c.type === "M" || c.type === "AM") && prefAt(a, d) == null; });
-    const target = Math.min(neutral.length, Math.max(0, Math.round((2 + rand()) * mDates.length / 28)));
-    shuffle(neutral).slice(0, target).forEach((d) => { next[a.id][keyOf(d)].type = "CP"; });
+    const picked = shuffle(neutral).slice(0, Math.min(neutral.length, target[a.id]));
+    picked.forEach((d) => { next[a.id][keyOf(d)].type = "CP"; });
+    H[a.id] += picked.length * (SHIFTS.CP.hours - SHIFTS.M.hours);
   });
-  const otBy = {}; team.forEach((a) => { otBy[a.id] = 0; });
   const coversH = (id, dk, h) => { const c = next[id][dk]; return c.type === h || c.type === "CP"; };
-  const wkey = (id) => otBy[id] * (byId[id].role === "chef" ? 2 : 3) - (byId[id].role === "chef" ? 0.001 : 0);
+  // Compensation : à la personne la moins chargée ; les chef·fes comptent pour 95 % de leurs heures,
+  // ils en prennent donc un peu plus (règle conservée de l'ancien site)
+  const wkey = (id) => H[id] * (byId[id].role === "chef" ? 0.95 : 1);
   mDates.forEach((d) => {
     const dk = keyOf(d);
     ["M", "AM"].forEach((short) => {
@@ -129,11 +147,23 @@ export function buildPlanning(team, mDates, minHalf = 4, seed) {
         const pick = shuffle(pool).sort((x, y) => wkey(x.id) - wkey(y.id))[0];
         if (!pick) break;
         next[pick.id][dk] = { ...next[pick.id][dk], type: "CP", tag: null, comp: true, compHalf: short, ot: (next[pick.id][dk].ot || 0) + OT_ADD };
-        otBy[pick.id] += OT_ADD;
+        H[pick.id] += OT_ADD;
       }
     });
   });
   return next;
+}
+
+/** Heures cumulées par personne (pkey) sur les mois donnés, versions validées en priorité. */
+export function seasonHours(monthList, ctx) {
+  const out = {};
+  monthList.forEach((m) => {
+    const plan = ctx.archives.find((a) => a.mk === m)?.snapshot || ctx.plans[m];
+    if (!plan) return;
+    const dates = monthDates(m, ctx.season.open, ctx.season.close);
+    (ctx.monthTeams[m] || []).forEach((a) => { const k = pkey(a); out[k] = (out[k] || 0) + totalsFor(a, dates, plan).total; });
+  });
+  return out;
 }
 
 // Base / heures sup / total d'une personne sur un mois (même calcul que le site actuel)

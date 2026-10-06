@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { supabase, PLANNING_ID } from "./supabase.js";
 import {
-  monthsInSeason, monthDates, monthName, buildPlanning, keyOf, pkey, uid, todayKey, frDate, loadState, emptyState, DATA_VERSION, deM } from "./data.js";
+  monthsInSeason, monthDates, monthName, buildPlanning, keyOf, pkey, uid, todayKey, frDate, loadState, emptyState, DATA_VERSION, seasonHours, deM } from "./data.js";
 import { Avatar } from "./ui.jsx";
 import Planning from "./pages/Planning.jsx";
 import Equipe from "./pages/Equipe.jsx";
@@ -124,18 +124,24 @@ export default function App() {
     updPlan((pl) => ({ ...pl, [aId]: { ...pl[aId], [dk]: { ...A, type: B.type, tag: null } }, [bId]: { ...pl[bId], [dk]: { ...B, type: A.type, tag: null } } }));
     say(`${n(aId)} et ${n(bId)} permutés le ${Number(dk.slice(8))}.`, () => updPlan((pl) => ({ ...pl, [aId]: { ...pl[aId], [dk]: A }, [bId]: { ...pl[bId], [dk]: B } })));
   };
+  // Heures déjà faites avant le mois m, par fiche de l'équipe du mois (pour équilibrer la génération)
+  const priorFor = (m, t, plansNow) => {
+    const cum = seasonHours(months.slice(0, months.indexOf(m)), { archives: db.archives, plans: plansNow, monthTeams: db.monthTeams, season });
+    return Object.fromEntries(t.map((a) => [a.id, cum[pkey(a)] || 0]));
+  };
   const generate = () => {
     if (archived) { say(`${mName} est validé : il n’est plus régénérable.`); return; }
     if (!team.length) { say(`L’équipe ${deM(mName)} est vide : ajoutez des personnes dans Équipe.`); setPage("equipe"); return; }
     const before = db.plans[mk];
-    setPlans((p) => ({ ...p, [mk]: buildPlanning(team, dates, season.minHalf) }));
+    setPlans((p) => ({ ...p, [mk]: buildPlanning(team, dates, season.minHalf, null, priorFor(mk, team, db.plans)) }));
     setSel(null); setPage("planning");
     say(`Planning ${deM(mName)} généré : ${dates.length} jours, ${team.length} personnes.`, before ? () => setPlans((p) => ({ ...p, [mk]: before })) : null);
   };
   const generateAll = () => {
     const before = db.plans;
     const next = { ...db.plans };
-    months.forEach((m) => { const t = db.monthTeams[m] || []; if (!db.archives.some((a) => a.mk === m) && t.length) next[m] = buildPlanning(t, monthDates(m, season.open, season.close), season.minHalf); });
+    // Mois après mois : chaque mois tient compte des heures des mois précédents tout juste générés
+    months.forEach((m) => { const t = db.monthTeams[m] || []; if (!db.archives.some((a) => a.mk === m) && t.length) next[m] = buildPlanning(t, monthDates(m, season.open, season.close), season.minHalf, null, priorFor(m, t, next)); });
     setPlans(next); setPage("planning");
     say("Toute la saison a été générée. Les mois validés sont conservés.", () => setPlans(before));
   };
