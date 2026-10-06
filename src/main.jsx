@@ -1,10 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "../planning-equipe.jsx";
-import "./index.css";
+import App from "./App.jsx";
+import "./styles.css";
+import "./styles-v2.css";
+import "./theme-palette.css";
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);

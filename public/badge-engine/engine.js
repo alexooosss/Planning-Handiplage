@@ -21,6 +21,7 @@
   const CSS_FONT = {
     sans600: { family: 'Badge Sans', weight: 600, style: 'normal' },
     sans400: { family: 'Badge Sans', weight: 400, style: 'normal' },
+    sans700: { family: 'Badge Sans', weight: 700, style: 'normal' },
     role300i: { family: 'Badge Serif', weight: 300, style: 'italic' },
     role600i: { family: 'Badge Serif', weight: 600, style: 'italic' },
   };
@@ -100,10 +101,13 @@
 
   function layoutText(person, role, W, H) {
     const sx = W / 85, sy = H / 53, ss = Math.min(sx, sy);
+    const L = Object.assign({ nameScale: 1, roleScale: 1, align: 'left', nameFont: 'sans600', lastUpper: true, labelAlign: 'right', offsetY: 0 }, role.layout || {});
     const left = REF.marginX * sx;
     const maxW = W - 2 * REF.marginX * sx;
+    const nameX = L.align === 'center' ? W / 2 : L.align === 'right' ? W - left : left;
+    const nameAnchor = L.align === 'center' ? 'middle' : L.align === 'right' ? 'end' : 'start';
     const first = (person.first || '').trim();
-    const last = (person.last || '').trim().toLocaleUpperCase('fr-FR');
+    const last = L.lastUpper ? (person.last || '').trim().toLocaleUpperCase('fr-FR') : (person.last || '').trim();
     const label = roleLabel(person, role);
     const roleFont = role.roleWeight === 600 ? 'role600i' : 'role300i';
     const fit = (fontKey, text, base) => {
@@ -112,12 +116,13 @@
       const shrink = w > maxW ? maxW / w : 1;
       return { size: base * shrink, shrink, width: w * shrink };
     };
-    const lastBase = REF.last.size * ss;
-    const f1 = fit('sans600', first, REF.first.size * ss);
-    const f3 = fit(roleFont, label, REF.role.size * ss);
+    const NF = L.nameFont;
+    const lastBase = REF.last.size * ss * L.nameScale;
+    const f1 = fit(NF, first, REF.first.size * ss * L.nameScale);
+    const f3 = fit(roleFont, label, REF.role.size * ss * L.roleScale);
     let lastLines = [last], lastSize, lastShrink;
     {
-      const f2 = fit('sans600', last, lastBase);
+      const f2 = fit(NF, last, lastBase);
       lastSize = f2.size; lastShrink = f2.shrink;
       // Nom tres long : passage sur deux lignes (coupure a l'espace ou au trait d'union le plus equilibre)
       if (f2.shrink < 0.72) {
@@ -127,7 +132,7 @@
           if (ch !== ' ' && ch !== '-') continue;
           const a = last.slice(0, ch === '-' ? i + 1 : i).trim(), b = last.slice(i + 1).trim();
           if (!a || !b) continue;
-          const w = Math.max(textWidthMm('sans600', a, 1), textWidthMm('sans600', b, 1));
+          const w = Math.max(textWidthMm(NF, a, 1), textWidthMm(NF, b, 1));
           if (!best || w < best.w) best = { a, b, w };
         }
         if (best) {
@@ -136,12 +141,16 @@
         }
       }
     }
-    const lastY = (REF.last.y - (lastLines.length > 1 ? 2 : 0)) * sy, lineGap = (lastSize / PT_PER_MM) * 0.98;
+    // Taille agrandie : le nom descend un peu pour garder l'interligne d'origine
+    const dy = L.offsetY * sy, grow = (L.nameScale - 1) * 12 * sy;
+    const lastY = (REF.last.y - (lastLines.length > 1 ? 2 : 0)) * sy + grow + dy, lineGap = (lastSize / PT_PER_MM) * 0.98;
+    const roleX = L.labelAlign === 'left' ? left : L.labelAlign === 'center' ? W / 2 : REF.role.right * sx;
+    const roleAnchor = L.labelAlign === 'left' ? 'start' : L.labelAlign === 'center' ? 'middle' : 'end';
     return {
       items: [
-        { text: first, font: 'sans600', size: f1.size, x: left, y: REF.first.y * sy, anchor: 'start' },
-        ...lastLines.map((t, i) => ({ text: t, font: 'sans600', size: lastSize, x: left, y: lastY + i * lineGap, anchor: 'start' })),
-        { text: label, font: roleFont, size: f3.size, x: REF.role.right * sx, y: REF.role.y * sy, anchor: 'end' },
+        { text: first, font: NF, size: f1.size, x: nameX, y: REF.first.y * sy + grow * 0.35 + dy, anchor: nameAnchor },
+        ...lastLines.map((t, i) => ({ text: t, font: NF, size: lastSize, x: nameX, y: lastY + i * lineGap, anchor: nameAnchor })),
+        { text: label, font: roleFont, size: f3.size, x: roleX, y: REF.role.y * sy, anchor: roleAnchor },
       ],
       roleFont, roleText: label,
       shrink: Math.min(f1.shrink, lastShrink, f3.shrink),
@@ -164,7 +173,14 @@
   }
 
   /* ---------- Dessin d'un badge (commun SVG / PDF) ---------- */
-  function drawArt(p, x, y, W, H, bleed, motif) {
+  function drawArt(p, x, y, W, H, bleed, motif, opt = {}) {
+    if (opt.flipX || opt.flipY) {
+      p.save();
+      p.transform(opt.flipX ? -1 : 1, 0, 0, opt.flipY ? -1 : 1, opt.flipX ? 2 * x + W : 0, opt.flipY ? 2 * y + H : 0);
+      drawArt(p, x, y, W, H, bleed, motif, { ...opt, flipX: false, flipY: false });
+      p.restore();
+      return;
+    }
     const s = Math.max(W / ART.width, H / ART.height);
     const tx = x + (W - ART.width * s) / 2;
     const ty = y + (H - ART.height * s) / 2;
@@ -193,8 +209,8 @@
       p.clipRect(rx, ry, rw, rh);
       if (a !== 1 || d !== 1) p.transform(a, 0, 0, d, e, f);
       p.transform(s, 0, 0, s, tx, ty);
-      p.fillArt('waves', motif);
-      p.fillArt('octopus', motif);
+      if (opt.waves !== false) p.fillArt('waves', motif);
+      if (opt.octopus !== false) p.fillArt('octopus', motif);
       p.restore();
     }
   }
@@ -214,14 +230,16 @@
     if (bg.mode === 'image' && image) {
       p.image(image, x - IMAGE_BLEED, y - IMAGE_BLEED, W + 2 * IMAGE_BLEED, H + 2 * IMAGE_BLEED);
       if (bg.veil > 0) p.fillRect(bx, by, bw, bh, C.navy, bg.veil);
-      if (bg.motifOnImage) drawArt(p, x, y, W, H, bleed, bg.motif);
+      if (bg.motifOnImage) drawArt(p, x, y, W, H, bleed, bg.motif, bg);
     } else if (bg.mode === 'pattern') {
-      drawArt(p, x, y, W, H, bleed, bg.motif);
+      drawArt(p, x, y, W, H, bleed, bg.motif, bg);
     }
+    // Bandeau de couleur en bas du badge (déborde dans le fond perdu)
+    if (role.band) p.fillRect(bx, y + H - role.band.h, bw, role.band.h + bleed, role.band.color);
     p.restore();
 
     const lay = layoutText(person, role, W, H);
-    const ink = role.text === 'navy' ? C.navy : C.white;
+    const ink = role.ink || (role.text === 'navy' ? C.navy : C.white);
     for (const t of lay.items) {
       if (t.text) p.text(t.text, x + t.x, y + t.y, t.font, t.size, ink, t.anchor);
     }
@@ -406,7 +424,7 @@
     line(x1, y1, x2, y2, w, col) { this.ops.push(`${n(w)} w`, this.strokeOp(col), `${n(x1)} ${n(y1)} m ${n(x2)} ${n(y2)} l S`); }
     text(str, x, y, fontKey, sizePt, col, anchor) {
       const size = sizePt / PT_PER_MM;
-      const tx = anchor === 'end' ? x - textWidthMm(fontKey, str, sizePt) : x;
+      const tx = anchor === 'end' ? x - textWidthMm(fontKey, str, sizePt) : anchor === 'middle' ? x - textWidthMm(fontKey, str, sizePt) / 2 : x;
       const font = this.res.font(fontKey);
       this.ops.push('BT', this.fillOp(col), `${font.name} 1 Tf`, `${n(size)} 0 0 ${n(-size)} ${n(tx)} ${n(y)} Tm`, `${font.pdf.encodeText(str).toString()} Tj`, 'ET');
     }
