@@ -25,6 +25,7 @@ export const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin",
 export const WD = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
 export const WD_FULL = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 export const cap = (s) => s[0].toUpperCase() + s.slice(1);
+export const MONTHS_ABBR = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
 export const keyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 export const parseDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
@@ -288,12 +289,32 @@ export function migrateV1(d) {
   return st;
 }
 
+/**
+ * Sécurité : un mois qui a un planning (ou une archive) mais une équipe vide retrouve son équipe,
+ * reconstruite à partir des données d'origine conservées (mêmes identifiants que dans le planning).
+ */
+export function repairTeams(st, legacy) {
+  if (!legacy) return st;
+  const old = migrateV1(legacy);
+  const monthTeams = { ...st.monthTeams };
+  let fixed = false;
+  for (const mk of Object.keys(old.monthTeams)) {
+    const plan = st.plans?.[mk] || st.archives?.find((a) => a.mk === mk)?.snapshot;
+    const ids = new Set(Object.keys(plan || {}));
+    if (!ids.size || (monthTeams[mk] || []).length) continue;
+    const team = old.monthTeams[mk].filter((a) => ids.has(a.id));
+    if (team.length) { monthTeams[mk] = team; fixed = true; }
+  }
+  return fixed ? { ...st, monthTeams } : st;
+}
+
 /** Lit ce qui est stocké dans Supabase, quelle que soit sa version. */
 export function loadState(raw) {
   if (!raw) return emptyState();
   if (raw.version === DATA_VERSION) {
     const base = emptyState();
-    return { ...base, ...raw, season: { ...base.season, ...raw.season }, badges: { ...base.badges, ...(raw.badges || {}) } };
+    const st = { ...base, ...raw, season: { ...base.season, ...raw.season }, badges: { ...base.badges, ...(raw.badges || {}) } };
+    return repairTeams(st, raw.legacyV1);
   }
   return migrateV1(raw);
 }

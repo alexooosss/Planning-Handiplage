@@ -423,3 +423,11 @@ table.sheet .n { overflow: hidden; text-overflow: ellipsis; }
 }
 /* Photo légèrement agrandie depuis le haut à gauche : la marque (cœur) en bas à droite sort du cadre */
 .login .login-photo { scale: 1.07; transform-origin: 0 0; }
+
+
+/* Événements : plus de fond jaunâtre ; la date du jour reste lisible */
+.event.today { background: #F1F2FE; }
+.agenda-date span { color: inherit; opacity: 0.8; font-weight: 600; }
+.event.today .agenda-date { background: var(--electric); color: #FFFFFF; }
+.event.today .agenda-date span { opacity: 0.9; }
+:root[data-theme="dark"] .event.today { background: #12205A; }

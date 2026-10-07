@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ChevronRight, Send, Flag, Archive, ArrowLeftRight, CalendarDays } from "lucide-react";
-import { SHIFTS, OFF, WD, WD_FULL, MONTHS_FR, keyOf, parseDate, fmtH, shortDay, dayLabel, monthName, totalsFor, pkey, deM } from "../data.js";
+import { SHIFTS, OFF, WD, WD_FULL, MONTHS_FR, MONTHS_ABBR, keyOf, parseDate, fmtH, shortDay, dayLabel, monthName, totalsFor, pkey, deM } from "../data.js";
 import { Panel, Shift, RoleDot, Field } from "../ui.jsx";
 
 const monday = (d) => { const x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return keyOf(x); };
@@ -38,7 +38,7 @@ export default function Agent({ me, team, plan, dates, mName, happenings, reques
         <Panel title={<><Flag size={15} style={{ verticalAlign: -2 }} /> Événements à venir</>} flush>
           {upcoming.map((e) => { const d = parseDate(e.date); return (
             <div key={e.id} className={`event ro${e.date === TODAY ? " today" : ""}`}>
-              <div className="agenda-date"><span>{WD[d.getDay()]}</span><strong>{d.getDate()}</strong><span>{MONTHS_FR[d.getMonth()].slice(0, 4)}.</span></div>
+              <div className="agenda-date"><span>{WD[d.getDay()]}</span><strong>{d.getDate()}</strong><span>{MONTHS_ABBR[d.getMonth()]}</span></div>
               <div><b>{e.title}</b> <span className="muted small num">{e.time.replace(":", "h")}</span>{e.date === TODAY && <span className="chip brand" style={{ marginLeft: 8 }}>aujourd’hui</span>}{e.instructions && <p className="muted small">{e.instructions}</p>}</div>
             </div>
           ); })}

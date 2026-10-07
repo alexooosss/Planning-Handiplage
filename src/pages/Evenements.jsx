@@ -1,6 +1,6 @@
 import React from "react";
 import { Flag, Plus, Trash2, Eye } from "lucide-react";
-import { parseDate, WD, MONTHS_FR } from "../data.js";
+import { parseDate, WD, MONTHS_ABBR } from "../data.js";
 import { PageHead, Panel } from "../ui.jsx";
 
 // Fiche d'un événement. Définie hors de la page : recréée à chaque rendu, elle ferait perdre
@@ -9,7 +9,7 @@ function EventItem({ e, isPast, today, upd, onDelete }) {
   const d = parseDate(e.date);
   return (
     <div className={`event${isPast ? " past" : ""}${e.date === today ? " today" : ""}`}>
-      <div className="agenda-date"><span>{WD[d.getDay()]}</span><strong>{d.getDate()}</strong><span>{MONTHS_FR[d.getMonth()].slice(0, 4)}.</span></div>
+      <div className="agenda-date"><span>{WD[d.getDay()]}</span><strong>{d.getDate()}</strong><span>{MONTHS_ABBR[d.getMonth()]}</span></div>
       <div className="event-fields">
         <input className="inline-input title" value={e.title} placeholder="Titre de l’événement" aria-label="Titre" onChange={(x) => upd(e.id, { title: x.target.value })} />
         <div className="event-when">
