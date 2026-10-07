@@ -293,11 +293,21 @@ export function migrateV1(d) {
  * Retire du planning d'un mois (non validé) les lignes des personnes qui ne sont plus dans son équipe :
  * une équipe vidée volontairement ne doit plus produire de planning ni d'alertes.
  */
+// Les ajouts manuels se font par demi-heure : un reste de 4h05 (± demi-heures) sur une case qui n'est
+// pas un coupé vient forcément d'une compensation retirée sans ses heures sup.
+function cleanOt(c) {
+  if (!c || !c.ot) return c;
+  if (OFF.includes(c.type)) return { ...c, ot: 0 };
+  if (c.type === "CP" || c.comp) return c;
+  const rest = c.ot - OT_ADD, half = (x) => Math.abs(x - Math.round(x * 2) / 2) < 0.002;
+  return !half(c.ot) && rest >= -0.002 && half(rest) ? { ...c, ot: Math.max(0, +rest.toFixed(4)) } : c;
+}
+
 export function pruneOrphans(st) {
   const plans = {};
   for (const [mk, plan] of Object.entries(st.plans || {})) {
     const ids = new Set((st.monthTeams[mk] || []).map((a) => a.id));
-    const keep = Object.fromEntries(Object.entries(plan || {}).filter(([id]) => ids.has(id)));
+    const keep = Object.fromEntries(Object.entries(plan || {}).filter(([id]) => ids.has(id)).map(([id, days]) => [id, Object.fromEntries(Object.entries(days).map(([dk, c]) => [dk, cleanOt(c)]))]));
     if (Object.keys(keep).length) plans[mk] = keep;
   }
   return { ...st, plans };

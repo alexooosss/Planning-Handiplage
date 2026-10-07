@@ -214,7 +214,7 @@ function Inspector({ team, plan, dates, sel, setSel, setCell, swapCells, counts,
           <span className="field-label">Horaire</span>
           <div className="shift-pick" role="group" aria-label="Horaire">
             {[...WORK, ...OFF].map((k) => (
-              <button key={k} className="shift-opt" aria-pressed={c.type === k} onClick={() => setCell(a.id, sel.day, { type: k, comp: false, compHalf: null, manual: false, tag: null })}>
+              <button key={k} className="shift-opt" aria-pressed={c.type === k} onClick={() => k !== c.type && setCell(a.id, sel.day, { type: k, comp: false, compHalf: null, manual: false, tag: null, ot: OFF.includes(k) ? 0 : c.comp ? Math.max(0, +((c.ot || 0) - OT_ADD).toFixed(4)) : c.ot || 0 })}>
                 <Shift t={k} size="sm" /><span>{SHIFTS[k].label}</span>
               </button>
             ))}

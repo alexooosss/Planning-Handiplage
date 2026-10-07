@@ -106,7 +106,7 @@ export default function Agent({ me, team, plan, dates, mName, happenings, reques
                             <span className="aday-date"><span>{WD[d.getDay()]}</span><b>{d.getDate()}</b></span>
                             <Shift c={c} />
                             <span className="aday-main"><b>{s.label}</b>{c.tag && <span className="aday-tag">{c.tag === "VR" ? "veille de repos" : "lendemain de repos"}</span>}<span className="block muted num small">{s.time}</span></span>
-                            <span className="aday-h num">{s.hours ? fmtH(s.hours) : ""}{c.ot > 0 && <span className="block hs-txt">+{fmtH(c.ot)}</span>}</span>
+                            <span className="aday-h num">{s.hours ? fmtH(s.hours) : ""}{c.ot > 0 && <span className="block hs-txt">+{fmtH(c.ot)} sup</span>}</span>
                             <ChevronRight size={16} className="chev" />
                           </button>
                           {isOpen && (
