@@ -431,3 +431,38 @@ table.sheet .n { overflow: hidden; text-overflow: ellipsis; }
 .event.today .agenda-date { background: var(--electric); color: #FFFFFF; }
 .event.today .agenda-date span { opacity: 0.9; }
 :root[data-theme="dark"] .event.today { background: #12205A; }
+
+/* Espace agent : sections (téléphone) */
+.agent-tabs, .month-switch { display: none; }
+.hs-sum { color: var(--sand-ink); }
+@media (max-width: 860px) {
+  /* Bandeau : logo + compte seulement ; les mois passent dans la section Planning */
+  .agent-shell .topbar .months { display: none; }
+  .agent-shell .topbar { grid-template-rows: auto; padding-bottom: 10px; }
+  .agent-space { gap: 14px; }
+  .agent-space .sec, .agent-space .mobile-only { display: none; }
+  .agent-space[data-tab="planning"] .sec-planning,
+  .agent-space[data-tab="events"] .sec-events,
+  .agent-space[data-tab="past"] .sec-past { display: block; }
+  .agent-space[data-tab="requests"] .sec-requests { display: flex; }
+  .agent-grid { gap: 0; }
+  .agent-tabs {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+    position: sticky; top: 62px; z-index: 15; margin: -18px -14px 0; padding: 8px 10px;
+    background: rgb(243 242 241 / 0.94); backdrop-filter: saturate(1.4) blur(8px); border-bottom: 1px solid var(--line);
+  }
+  .agent-tabs button {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    min-height: 54px; padding: 6px 2px; border: 0; border-radius: 12px; background: transparent;
+    color: var(--ink-3); font-size: 12px; font-weight: 700;
+  }
+  .agent-tabs button[aria-current="page"] { background: var(--surface); color: var(--electric); box-shadow: 0 1px 2px rgb(5 20 51 / 0.12), 0 0 0 1px rgb(5 20 51 / 0.06); }
+  .agent-tabs .badge-n { position: absolute; top: 4px; right: calc(50% - 22px); min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--electric); color: #FFFFFF; font: 700 10.5px/17px var(--font); font-style: normal; }
+  .month-switch { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+  .month-switch .select { flex: 1; min-height: 44px; font-weight: 700; text-align: center; text-align-last: center; }
+  .month-switch .icon-btn { width: 44px; height: 44px; border: 1px solid var(--line-strong); background: var(--surface); }
+  .month-switch .icon-btn:disabled { opacity: 0.35; }
+  .agent-hello h1 { font-size: 22px; }
+  .agent-hello .sub { font-size: 13.5px; }
+  :root[data-theme="dark"] .agent-tabs { background: rgb(5 20 51 / 0.94); }
+}

@@ -304,7 +304,7 @@ export default function App() {
         </header>
 
         <main className="page">
-          {isAdmin ? <Page {...ctx} /> : <Agent me={team.find((a) => pkey(a) === session.pkey)} {...{ team, plan, dates, mName, happenings: db.happenings, requests: db.requests, submit, archives: db.archives, monthTeams: db.monthTeams, today: todayKey() }} />}
+          {isAdmin ? <Page {...ctx} /> : <Agent me={team.find((a) => pkey(a) === session.pkey)} {...{ team, plan, dates, mName, happenings: db.happenings, requests: db.requests, submit, archives: db.archives, monthTeams: db.monthTeams, today: todayKey(), months, mk, setMonth, monthStatus: (m) => (status(m) === "ok" ? "publié" : status(m) === "draft" ? "provisoire" : "à venir") }} />}
         </main>
       </div>
 
