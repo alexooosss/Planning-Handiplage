@@ -466,3 +466,16 @@ table.sheet .n { overflow: hidden; text-overflow: ellipsis; }
   .agent-hello .sub { font-size: 13.5px; }
   :root[data-theme="dark"] .agent-tabs { background: rgb(5 20 51 / 0.94); }
 }
+
+/* Fiches d'identifiants : une par ligne, logo en grand à gauche (1/4), barre, informations à droite (3/4) */
+@media print {
+  .ids-grid { grid-template-columns: 1fr; }
+  .id-card { height: 42mm; padding: 0; display: grid; grid-template-columns: 1fr 3fr; gap: 0; align-items: stretch; }
+  .id-card .id-logo { display: flex; align-items: center; justify-content: center; padding: 4mm 5mm; border-right: 0.8mm solid #051433; }
+  .id-card .id-logo img { width: 100%; height: auto; max-height: 30mm; }
+  .id-card .id-info { display: flex; flex-direction: column; justify-content: center; gap: 1.8mm; padding: 4mm 7mm; min-width: 0; }
+  .id-name { font-size: 14pt; }
+  .id-card dl { grid-template-columns: 26mm 1fr; font-size: 10pt; }
+  .id-card dd.num { font-size: 13pt; }
+  .id-card p { margin-top: 1mm; font-size: 8pt; }
+}

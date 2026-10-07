@@ -79,14 +79,16 @@ export default function Comptes({ accounts, setAccounts, allPeople, say }) {
         <div className="ids-grid">
           {printable.map((c) => (
             <div className="id-card" key={c.id}>
-              <img src={`${import.meta.env.BASE_URL}logo-light.svg`} alt="" />
-              <b className="id-name">{c.name || "Agent"}</b>
-              <dl>
-                <dt>Adresse</dt><dd>alexooosss.github.io/Planning-Handiplage</dd>
-                <dt>Identifiant</dt><dd className="num">{c.id}</dd>
-                <dt>Mot de passe</dt><dd className="num">{c.password}</dd>
-              </dl>
-              <p>Choisissez « Agent » à la connexion. Changez votre mot de passe dans « Mon profil ».</p>
+              <div className="id-logo"><img src={`${import.meta.env.BASE_URL}logo-light.svg`} alt="Handiplage Planning" /></div>
+              <div className="id-info">
+                <b className="id-name">{c.name || "Agent"}</b>
+                <dl>
+                  <dt>Adresse</dt><dd>alexooosss.github.io/Planning-Handiplage</dd>
+                  <dt>Identifiant</dt><dd className="num">{c.id}</dd>
+                  <dt>Mot de passe</dt><dd className="num">{c.password}</dd>
+                </dl>
+                <p>Choisissez « Agent » à la connexion. Changez votre mot de passe dans « Mon profil ».</p>
+              </div>
             </div>
           ))}
         </div>
