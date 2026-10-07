@@ -529,3 +529,9 @@ table.data tr.year-row th { text-align: left; padding: 14px 12px 6px; font-size:
 .arc-log li svg { margin-top: 3px; color: var(--ink-3); grid-row: span 2; }
 .arc-log .when { font: 600 11.5px var(--mono); color: var(--ink-3); }
 @media (max-width: 1100px) { .arc-extra { grid-template-columns: minmax(0, 1fr); } }
+
+
+/* Bandeau : données modifiées ailleurs */
+.conflict-bar { position: fixed; z-index: 80; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(760px, calc(100vw - 32px)); box-shadow: 0 18px 50px rgba(5, 20, 51, 0.25); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 12px; background: #FDECEA; color: #7A1C12; font-size: 14px; font-weight: 600; }
+.conflict-bar span { flex: 1 1 320px; }
+:root[data-theme="dark"] .conflict-bar { background: #3A1512; color: #FFD9D3; }

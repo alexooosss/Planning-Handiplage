@@ -31,32 +31,54 @@ export default function App() {
   const [legacy, setLegacy] = useState(null); // données de l'ancien site, conservées telles quelles
   const [loadError, setLoadError] = useState(false);
   const [save, setSave] = useState({ s: "idle", at: null });
+  const [conflict, setConflict] = useState(false); // les données ont changé ailleurs : on n'écrase rien
 
-  useEffect(() => {
-    supabase.from("planning_state").select("data").eq("id", PLANNING_ID).maybeSingle()
-      .then(({ data, error }) => {
-        if (error) throw error;
-        const raw = data?.data || null;
-        if (raw && raw.version !== DATA_VERSION) setLegacy(raw);
-        else if (raw?.legacyV1) setLegacy(raw.legacyV1);
-        setDb(loadState(raw));
-      })
-      .catch(() => { setLoadError(true); setDb(emptyState()); });
-  }, []);
-
-  // Enregistrement automatique 2,5 s après la dernière modification
+  // Version enregistrée que cet onglet a chargée (ou écrite en dernier)
+  const version = useRef(null);
   const firstSave = useRef(true);
+  const sameVersion = (a, b) => (a && b ? Date.parse(a) === Date.parse(b) : a === b);
+  const fetchState = useCallback((initial) => supabase.from("planning_state").select("data, updated_at").eq("id", PLANNING_ID).maybeSingle()
+    .then(({ data, error }) => {
+      if (error) throw error;
+      const raw = data?.data || null;
+      if (raw && raw.version !== DATA_VERSION) setLegacy(raw);
+      else if (raw?.legacyV1) setLegacy(raw.legacyV1);
+      version.current = data?.updated_at || null;
+      firstSave.current = true; // des données fraîches ne se réenregistrent pas
+      setConflict(false); setSave({ s: "idle", at: null });
+      setDb(loadState(raw));
+    })
+    .catch(() => { if (initial) { setLoadError(true); setDb(emptyState()); } }), []);
+  useEffect(() => { fetchState(true); }, [fetchState]);
+
+  // En revenant sur l'onglet : si les données ont changé ailleurs et que rien n'est en cours ici, on recharge
+  const saving = useRef(false);
   useEffect(() => {
-    if (!db || loadError) return;
+    const onShow = async () => {
+      if (document.visibilityState !== "visible" || saving.current || loadError) return;
+      const { data } = await supabase.from("planning_state").select("updated_at").eq("id", PLANNING_ID).maybeSingle();
+      if (data && !sameVersion(data.updated_at, version.current) && !saving.current) fetchState(false);
+    };
+    document.addEventListener("visibilitychange", onShow);
+    return () => document.removeEventListener("visibilitychange", onShow);
+  }, [fetchState, loadError]);
+
+  // Enregistrement automatique 2,5 s après la dernière modification, seulement si personne n'a enregistré entre-temps
+  useEffect(() => {
+    if (!db || loadError || conflict) return;
     if (firstSave.current) { firstSave.current = false; return; }
-    setSave({ s: "saving" });
+    setSave({ s: "saving" }); saving.current = true;
     const t = setTimeout(async () => {
+      const { data: cur } = await supabase.from("planning_state").select("updated_at").eq("id", PLANNING_ID).maybeSingle();
+      if (cur && !sameVersion(cur.updated_at, version.current)) { setConflict(true); setSave({ s: "error" }); saving.current = false; return; }
+      const stamp = new Date().toISOString();
       const payload = { ...db, version: DATA_VERSION, ...(legacy ? { legacyV1: legacy } : {}) };
-      const { error } = await supabase.from("planning_state").upsert({ id: PLANNING_ID, data: payload, updated_at: new Date().toISOString() });
-      setSave(error ? { s: "error" } : { s: "saved", at: new Date() });
+      const { data: saved, error } = await supabase.from("planning_state").upsert({ id: PLANNING_ID, data: payload, updated_at: stamp }).select("updated_at").maybeSingle();
+      if (!error) version.current = saved?.updated_at || stamp;
+      setSave(error ? { s: "error" } : { s: "saved", at: new Date() }); saving.current = false;
     }, 2500);
-    return () => clearTimeout(t);
-  }, [db, legacy, loadError]);
+    return () => { clearTimeout(t); saving.current = false; };
+  }, [db, legacy, loadError, conflict]);
 
   // Modifie une partie de l'état (valeur ou fonction)
   const upd = useCallback((key) => (v) => setDb((d) => ({ ...d, [key]: typeof v === "function" ? v(d[key]) : v })), []);
@@ -206,10 +228,20 @@ export default function App() {
     f.text().then((t) => {
       try {
         const raw = JSON.parse(t);
-        if (!raw || typeof raw !== "object" || !(raw.monthTeams || raw.season || raw.seasonOpen)) throw new Error("format");
+        // Seuls deux formats sont reconnus : les sauvegardes de ce site (version 2) et celles de l'ancien site
+        const isV2 = raw?.version === DATA_VERSION && raw.monthTeams && raw.season;
+        const isV1 = raw && !raw.version && raw.seasonOpen && raw.assignments && raw.monthTeams;
+        if (!isV2 && !isV1) { say("Fichier refusé : ce n’est pas une sauvegarde du site Planning (un fichier du prototype, par exemple). Rien n’a été modifié."); return; }
+        const next = loadState(raw);
+        const lost = db.archives.filter((a) => !next.archives.some((b) => b.mk === a.mk));
+        const ok = window.confirm(`Remplacer toutes les données du site par ce fichier ?\n\n` +
+          `Fichier : saison ${next.season.open.slice(0, 4)}, ${Object.values(next.monthTeams).reduce((s, x) => s + x.length, 0)} fiches d’équipe, ${next.archives.length} mois validé(s), ${next.accounts.length} comptes.\n` +
+          `Une copie des données actuelles va d’abord être téléchargée.` + (lost.length ? `\nLes ${lost.length} mois validés absents du fichier seront conservés.` : ""));
+        if (!ok) return;
+        exportJSON();
         const before = db;
-        setDb(loadState(raw)); // accepte aussi les sauvegardes de l'ancien site
-        say("Saison importée.", () => setDb(before));
+        setDb({ ...next, archives: [...next.archives, ...lost] }); // un mois validé n'est jamais perdu par un import
+        say("Saison importée. Une copie des données d’avant a été téléchargée.", () => setDb(before));
       } catch { say("Fichier illisible : ce n’est pas une sauvegarde de planning."); }
     });
   };
@@ -320,6 +352,13 @@ export default function App() {
           </>}
         </header>
 
+        {conflict && (
+          <div className="conflict-bar" role="alert">
+            <AlertTriangle size={17} />
+            <span>Les données ont été modifiées depuis un autre onglet ou appareil. Pour ne rien écraser, vos dernières modifications ici n’ont pas été enregistrées.</span>
+            <button className="btn btn-primary btn-sm" onClick={() => fetchState(false)}>Recharger les données à jour</button>
+          </div>
+        )}
         <main className="page">
           {isAdmin ? <Page {...ctx} /> : <Agent me={team.find((a) => pkey(a) === session.pkey)} {...{ team, plan, dates, mName, happenings: db.happenings, requests: db.requests, submit, archives: db.archives, monthTeams: db.monthTeams, today: todayKey(), months, mk, setMonth, monthStatus: (m) => (status(m) === "ok" ? "publié" : status(m) === "draft" ? "provisoire" : "à venir") }} />}
         </main>
