@@ -517,3 +517,6 @@ table.plan thead th .w { font-size: 10px; letter-spacing: 0.02em; }
 @media (max-width: 640px) {
   .plan-wrap .inspector { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 75dvh; }
 }
+
+/* Historique : une ligne de titre par saison */
+table.data tr.year-row th { text-align: left; padding: 14px 12px 6px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); background: var(--sunk); }
