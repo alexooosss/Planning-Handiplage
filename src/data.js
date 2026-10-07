@@ -290,22 +290,17 @@ export function migrateV1(d) {
 }
 
 /**
- * Sécurité : un mois qui a un planning (ou une archive) mais une équipe vide retrouve son équipe,
- * reconstruite à partir des données d'origine conservées (mêmes identifiants que dans le planning).
+ * Retire du planning d'un mois (non validé) les lignes des personnes qui ne sont plus dans son équipe :
+ * une équipe vidée volontairement ne doit plus produire de planning ni d'alertes.
  */
-export function repairTeams(st, legacy) {
-  if (!legacy) return st;
-  const old = migrateV1(legacy);
-  const monthTeams = { ...st.monthTeams };
-  let fixed = false;
-  for (const mk of Object.keys(old.monthTeams)) {
-    const plan = st.plans?.[mk] || st.archives?.find((a) => a.mk === mk)?.snapshot;
-    const ids = new Set(Object.keys(plan || {}));
-    if (!ids.size || (monthTeams[mk] || []).length) continue;
-    const team = old.monthTeams[mk].filter((a) => ids.has(a.id));
-    if (team.length) { monthTeams[mk] = team; fixed = true; }
+export function pruneOrphans(st) {
+  const plans = {};
+  for (const [mk, plan] of Object.entries(st.plans || {})) {
+    const ids = new Set((st.monthTeams[mk] || []).map((a) => a.id));
+    const keep = Object.fromEntries(Object.entries(plan || {}).filter(([id]) => ids.has(id)));
+    if (Object.keys(keep).length) plans[mk] = keep;
   }
-  return fixed ? { ...st, monthTeams } : st;
+  return { ...st, plans };
 }
 
 /** Lit ce qui est stocké dans Supabase, quelle que soit sa version. */
@@ -314,7 +309,7 @@ export function loadState(raw) {
   if (raw.version === DATA_VERSION) {
     const base = emptyState();
     const st = { ...base, ...raw, season: { ...base.season, ...raw.season }, badges: { ...base.badges, ...(raw.badges || {}) } };
-    return repairTeams(st, raw.legacyV1);
+    return pruneOrphans(st);
   }
   return migrateV1(raw);
 }

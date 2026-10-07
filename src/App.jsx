@@ -108,7 +108,7 @@ export default function App() {
   const archived = db.archives.find((a) => a.mk === mk);
   const rawPlan = archived ? archived.snapshot : db.plans[mk] || null;
   // Grille complète pour l'affichage : une personne ajoutée après la génération apparaît au repos
-  const plan = rawPlan && Object.fromEntries(team.map((a) => [a.id, Object.fromEntries(dates.map((d) => { const k = keyOf(d); return [k, rawPlan[a.id]?.[k] || { type: "R", ot: 0 }]; }))]));
+  const plan = rawPlan && team.some((a) => rawPlan[a.id]) ? Object.fromEntries(team.map((a) => [a.id, Object.fromEntries(dates.map((d) => { const k = keyOf(d); return [k, rawPlan[a.id]?.[k] || { type: "R", ot: 0 }]; }))])) : null;
   const pending = db.requests.filter((r) => r.status === "pending");
   const say = (msg, undo) => setToast({ msg, undo });
 
@@ -208,7 +208,7 @@ export default function App() {
   if (!session) return <Login accounts={db.accounts} loadError={loadError} onLogin={(a) => { setSession(a); setPage("planning"); }} />;
 
   const isAdmin = session.role === "admin";
-  const status = (m) => (db.archives.some((a) => a.mk === m) ? "ok" : db.plans[m] ? "draft" : "empty");
+  const status = (m) => (db.archives.some((a) => a.mk === m) ? "ok" : db.plans[m] && (db.monthTeams[m] || []).some((a) => db.plans[m][a.id]) ? "draft" : "empty");
   const lowCount = plan ? dates.reduce((s, d) => { const k = keyOf(d); let m = 0, am = 0; team.forEach((a) => { const t = plan[a.id]?.[k]?.type; if (t === "M" || t === "CP") m++; if (t === "AM" || t === "CP") am++; }); return s + (m < season.minHalf) + (am < season.minHalf); }, 0) : 0;
   const badgeTodo = team.filter((a) => badgeStatus(a, db.badges) !== "ok").length;
   const noAcc = allPeople.filter((p) => !db.accounts.some((c) => c.pkey === pkey(p))).length;
