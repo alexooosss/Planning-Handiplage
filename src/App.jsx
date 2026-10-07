@@ -221,7 +221,7 @@ export default function App() {
   ];
   const ctx = {
     team, setTeam, plan, plans: db.plans, dates, mk, mName, months, season, setSeason, sel, setSel, setCell, swapCells,
-    dayNotes: db.dayNotes, setDayNotes, happenings: db.happenings, setHappenings, requests: db.requests, pending, decide, setPage,
+    dayNotes: db.dayNotes, setDayNotes, happenings: db.happenings, setHappenings, requests: db.requests, setRequests, pending, decide, setPage,
     generate, generateAll, archived, archives: db.archives, validate: () => setConfirmValidate(true), copyPrev,
     accounts: db.accounts, setAccounts, allPeople, monthTeams: db.monthTeams, badges: db.badges, setBadges,
     covDay, setCovDay, exportJSON, importJSON, say, today: todayKey(), openMonth: (m) => { setMonth(m); setPage("planning"); },

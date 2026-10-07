@@ -1,18 +1,24 @@
 import React, { useState } from "react";
-import { AlertTriangle, ArrowLeftRight, ArrowRight, CalendarDays, Check, CheckCircle2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, ArrowRight, CalendarDays, Check, CheckCircle2, Trash2, X } from "lucide-react";
 import { SHIFTS, parseDate, dayLabel, keyOf, pkey, since } from "../data.js";
 import { PageHead, Shift } from "../ui.jsx";
 import { halfCounts } from "./Planning.jsx";
 
-export default function Demandes({ monthTeams, plans, archives, requests, decide, season }) {
+export default function Demandes({ monthTeams, plans, archives, requests, setRequests, decide, season, say }) {
   const [tab, setTab] = useState("pending");
   const [replies, setReplies] = useState({});
+  const [confirmAll, setConfirmAll] = useState(false);
+  const remove = (r) => { setRequests((l) => l.filter((x) => x.id !== r.id)); say("Demande supprimée."); };
+  const removeDone = () => { const k = n("done"); setRequests((l) => l.filter((x) => x.status === "pending")); setConfirmAll(false); say(`${k} demande${k > 1 ? "s" : ""} traitée${k > 1 ? "s" : ""} supprimée${k > 1 ? "s" : ""}.`); };
   const list = requests.filter((r) => (tab === "all" ? true : tab === "pending" ? r.status === "pending" : r.status !== "pending"));
   const n = (s) => requests.filter((r) => (s === "pending" ? r.status === "pending" : r.status !== "pending")).length;
   return (
     <>
       <PageHead title="Demandes des agents" sub="Échanges et congés demandés depuis l’espace agent. Accepter applique automatiquement le changement au planning, et l’agent voit votre réponse.">
         <div className="seg" role="group" aria-label="Filtrer"><button aria-pressed={tab === "pending"} onClick={() => setTab("pending")}>En attente · {n("pending")}</button><button aria-pressed={tab === "done"} onClick={() => setTab("done")}>Traitées · {n("done")}</button><button aria-pressed={tab === "all"} onClick={() => setTab("all")}>Toutes</button></div>
+        {tab !== "pending" && n("done") > 0 && (confirmAll
+          ? <><button className="btn btn-danger-ghost btn-sm" onClick={removeDone}><Trash2 size={15} />Confirmer : supprimer les {n("done")} traitées</button><button className="btn btn-ghost btn-sm" onClick={() => setConfirmAll(false)}>Annuler</button></>
+          : <button className="btn btn-ghost btn-sm" onClick={() => setConfirmAll(true)}><Trash2 size={15} />Supprimer les traitées</button>)}
       </PageHead>
       <div className="req-list">
         {list.length === 0 && <div className="panel empty-state"><CheckCircle2 size={26} color="var(--ok)" /><h2>Rien en attente</h2><p className="muted">Les nouvelles demandes apparaissent ici et dans le menu.</p></div>}
@@ -54,6 +60,7 @@ export default function Demandes({ monthTeams, plans, archives, requests, decide
                   </div>
                 )}
               </div>
+              {r.status !== "pending" && <button className="icon-btn" aria-label="Supprimer cette demande" title="Supprimer cette demande" onClick={() => remove(r)}><Trash2 size={17} /></button>}
               {r.status === "pending" && (
                 <div className="acts">
                   <button className="btn btn-ok btn-sm" onClick={() => decide(r, true, replies[r.id])}><Check size={15} />Accepter</button>
