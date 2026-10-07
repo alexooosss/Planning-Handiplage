@@ -314,14 +314,43 @@ export function pruneOrphans(st) {
 }
 
 /** Lit ce qui est stocké dans Supabase, quelle que soit sa version. */
+// Une date de saison utilisable : AAAA-MM-JJ réelle, entre 2020 et 2100
+export const validDay = (s) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s || "")) return false;
+  const d = parseDate(s), y = d.getFullYear();
+  return y >= 2020 && y <= 2100 && keyOf(d) === s;
+};
+/**
+ * Saison cohérente : ouverture avant fermeture, au plus 12 mois. Si la fermeture tombe avant l'ouverture
+ * (ouverture passée à l'année suivante), elle est reportée au même jour de l'année de l'ouverture.
+ */
+export function fixSeason(season) {
+  const s = { ...DEFAULT_SEASON, ...season };
+  if (!validDay(s.open)) return { ...s, open: DEFAULT_SEASON.open, close: DEFAULT_SEASON.close };
+  if (!validDay(s.close) || s.close < s.open) {
+    const same = s.open.slice(0, 4) + (validDay(s.close) ? s.close.slice(4) : DEFAULT_SEASON.close.slice(4));
+    s.close = validDay(same) && same >= s.open ? same : keyOf(addDays(parseDate(s.open), 95));
+  }
+  if (monthsInSeason(s.open, s.close).length > 12) s.close = keyOf(addDays(parseDate(s.open), 95));
+  return s;
+}
+
+/** Retire les équipes vides créées automatiquement pour des mois hors de la saison (jamais une équipe remplie). */
+function pruneEmptyMonths(st) {
+  const keep = new Set(monthsInSeason(st.season.open, st.season.close));
+  const monthTeams = Object.fromEntries(Object.entries(st.monthTeams || {}).filter(([m, t]) => keep.has(m) || (t || []).length));
+  return { ...st, monthTeams };
+}
+
 export function loadState(raw) {
   if (!raw) return emptyState();
   if (raw.version === DATA_VERSION) {
     const base = emptyState();
-    const st = { ...base, ...raw, season: { ...base.season, ...raw.season }, badges: { ...base.badges, ...(raw.badges || {}) } };
-    return pruneOrphans(st);
+    const st = { ...base, ...raw, season: fixSeason({ ...base.season, ...raw.season }), badges: { ...base.badges, ...(raw.badges || {}) } };
+    return pruneEmptyMonths(pruneOrphans(st));
   }
-  return migrateV1(raw);
+  const st = migrateV1(raw);
+  return { ...st, season: fixSeason(st.season) };
 }
 
 // « il y a 2 h », « hier »… pour les demandes

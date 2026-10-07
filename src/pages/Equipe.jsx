@@ -1,10 +1,21 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Copy, KeyRound, Trash2, UserPlus, Wand2 } from "lucide-react";
-import { WD_FULL, monthDates, pkey, newAgent, deM, monthName } from "../data.js";
+import { WD_FULL, monthDates, pkey, newAgent, deM, monthName, validDay, fixSeason } from "../data.js";
 import { badgeStatus } from "./Badges.jsx";
 import { PageHead, Panel, Stepper, Field, RoleDot } from "../ui.jsx";
 
 export default function Equipe({ team, setTeam, mk, mName, months, season, setSeason, plan, generate, generateAll, copyPrev, accounts, badges, setPage, say }) {
+  // Dates de saison : saisies librement, appliquées seulement quand elles sont complètes et valides
+  const [draft, setDraft] = useState({ open: season.open, close: season.close });
+  useEffect(() => setDraft({ open: season.open, close: season.close }), [season.open, season.close]);
+  const editDate = (k, v) => {
+    const next = { ...draft, [k]: v };
+    setDraft(next);
+    if (!validDay(next.open) || !validDay(next.close)) return;
+    if (k === "close" && next.close < next.open) return;
+    setSeason(fixSeason({ ...season, ...next }));
+  };
+  const draftBad = !validDay(draft.open) || !validDay(draft.close) || draft.close < draft.open;
   const upd = (id, patch) => setTeam((t) => t.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   const chefs = team.filter((a) => a.role === "chef");
   const dates = monthDates(mk, season.open, season.close);
@@ -31,9 +42,10 @@ export default function Equipe({ team, setTeam, mk, mName, months, season, setSe
         <div className="stack">
           <Panel title="Saison">
             <div className="form-row">
-              <Field label="Ouverture"><input className="input" type="date" value={season.open} onChange={(e) => setSeason({ ...season, open: e.target.value })} /></Field>
-              <Field label="Fermeture"><input className="input" type="date" value={season.close} onChange={(e) => setSeason({ ...season, close: e.target.value })} /></Field>
+              <Field label="Ouverture"><input className="input" type="date" value={draft.open} onChange={(e) => editDate("open", e.target.value)} onBlur={() => setDraft({ open: season.open, close: season.close })} /></Field>
+              <Field label="Fermeture"><input className="input" type="date" value={draft.close} onChange={(e) => editDate("close", e.target.value)} onBlur={() => setDraft({ open: season.open, close: season.close })} /></Field>
             </div>
+            {draftBad && <p className="hint" style={{ color: "var(--danger)" }}>Date incomplète ou fermeture avant l’ouverture : la saison reste du {season.open.split("-").reverse().join("/")} au {season.close.split("-").reverse().join("/")}.</p>}
             <p className="hint">Un mois est créé pour chaque mois de la saison : {months.length} mois, {dates.length} jours d’ouverture en {mName.toLowerCase()}.</p>
             <div className="stack" style={{ gap: 12 }}>
               <Field label="Minimum par demi-journée" hint="Planning, alertes rouges"><Stepper value={season.minHalf} min={1} max={12} onChange={(v) => setSeason({ ...season, minHalf: v })} format={(v) => `${v} pers.`} label="Minimum par demi-journée" /></Field>
