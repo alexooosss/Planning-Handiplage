@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { AlertTriangle, ArrowRight, ArrowLeftRight, CalendarDays, CheckCircle2, Inbox, Lock, Plus, Wand2, X, Archive, Flag } from "lucide-react";
 import { SHIFTS, WORK, OFF, OT_ADD, ROLES, WD, WD_FULL, keyOf, addDays, fmtH, cap, dayLabel, totalsFor, deM } from "../data.js";
 import { Shift, Avatar, PersonName, RoleDot, PageHead, Legend, NoPlan, Stepper, Cov } from "../ui.jsx";
@@ -21,6 +21,13 @@ export default function Planning(p) {
   const { team, plan, dates, mk, mName, season, sel, setSel, dayNotes, setDayNotes, happenings, pending, setPage, generate, archived, validate, today } = p;
   const [filter, setFilter] = useState("all");
   const [noteEdit, setNoteEdit] = useState(null);
+  // Échap ferme le panneau de détail
+  useEffect(() => {
+    if (!p.sel) return;
+    const onKey = (e) => e.key === "Escape" && e.target.tagName !== "INPUT" && p.setSel(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [p.sel]);
   if (!plan) return <><PageHead title={`Planning ${deM(mName)}`} /><NoPlan month={mName} onGenerate={generate} /></>;
   const counts = dates.map((d) => ({ d, ...halfCounts(team, plan, d) }));
   const lows = counts.flatMap((c) => [c.m < season.minHalf && { ...c, half: "matin", n: c.m }, c.am < season.minHalf && { ...c, half: "après-midi", n: c.am }].filter(Boolean));
@@ -46,9 +53,9 @@ export default function Planning(p) {
         {!archived && <button className="todo-item neutral" onClick={validate}><Archive size={16} />Valider {mName.toLowerCase()} pour l’archiver et le publier<ArrowRight size={15} className="arrow" /></button>}
       </div>
 
-      <div className="plan-wrap">
+      <div className={`plan-wrap${sel ? " open" : ""}`}>
         <div className="grid-scroll" role="region" aria-label="Grille du planning" tabIndex={0}>
-          <table className="plan">
+          <table className="plan" style={{ minWidth: 200 + dates.length * 28 }}>
             <thead>
               <tr>
                 <th className="who">Équipe · total du mois</th>
@@ -116,7 +123,7 @@ export default function Planning(p) {
             </tfoot>
           </table>
         </div>
-        <Inspector {...p} counts={counts} lows={lows} />
+        {sel && <Inspector {...p} counts={counts} lows={lows} />}
       </div>
       <Legend minHalf={season.minHalf} />
     </>

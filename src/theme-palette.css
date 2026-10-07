@@ -497,3 +497,23 @@ table.sheet .n { overflow: hidden; text-overflow: ellipsis; }
   .id-card dd.num { font-size: 17pt; letter-spacing: 0.06em; }
   .id-card p { margin: 0; font-size: 8pt; color: #5D6680; }
 }
+
+/* Planning : la grille occupe toute la largeur, sans défilement horizontal ; le détail s'ouvre par-dessus, à droite */
+.plan-wrap, .plan-wrap.open { display: block; }
+table.plan { width: calc(100% - 4px); table-layout: fixed; }
+table.plan .who { width: 200px; min-width: 0; max-width: none; padding: 0 10px 0 12px; }
+table.plan thead th { min-width: 0; }
+table.plan thead th .w { font-size: 10px; letter-spacing: 0.02em; }
+.day-btn { padding: 4px 0; }
+.cell-btn { width: calc(100% - 4px); max-width: 40px; margin: 4px 2px; }
+.cell-btn .shift { min-width: 0; width: 100%; font-size: 12px; padding: 0; }
+.who-cell { gap: 7px; }
+.who-name { min-width: 0; }
+.plan-wrap .inspector {
+  position: fixed; z-index: 40; top: 16px; right: 16px; bottom: 16px; width: min(380px, calc(100vw - 32px));
+  overflow-y: auto; box-shadow: 0 18px 50px rgba(5, 20, 51, 0.22), 0 0 0 1px var(--line);
+}
+.plan-wrap .inspector .panel-head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+@media (max-width: 640px) {
+  .plan-wrap .inspector { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-height: 75dvh; }
+}
