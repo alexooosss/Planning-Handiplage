@@ -239,6 +239,16 @@ export function totalsFor(a, dates, plan) {
 export const DATA_VERSION = 2;
 export const DEFAULT_SEASON = { open: "2026-06-12", close: "2026-09-15", minHalf: 4, minEffectif: 5 };
 export const todayKey = () => keyOf(new Date());
+/** Décompte des heures pour la paie, lisible directement dans Excel (séparateur « ; », virgule décimale). */
+export function downloadHoursCsv(team, dates, plan, mk) {
+  const num = (h) => (Math.round(h * 100) / 100).toString().replace(".", ",");
+  const head = ["Nom", "Prénom", "Fonction", "Jours travaillés", "Coupés", "Heures de base", "Heures sup", "Total", "Total (h:min)"];
+  const lines = team.map((a) => { const t = totalsFor(a, dates, plan); return [a.last.toUpperCase(), a.first, ROLES[a.role].label, t.worked, t.cp, num(t.base), num(t.ot), num(t.total), fmtH(t.total)]; });
+  const csv = "\ufeff" + [head, ...lines].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `Heures-Handiplage_${mk}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
 export const frDate = (k) => (k ? k.split("-").reverse().join("/") : "");
 
 export function emptyState() {
@@ -335,6 +345,18 @@ export function fixSeason(season) {
   return s;
 }
 
+/**
+ * Une archive garde sa propre copie de l'équipe (noms, fonctions) : modifier l'équipe d'un mois
+ * ne change plus un mois validé. Les archives plus anciennes la reçoivent au premier chargement.
+ */
+function freezeArchives(st) {
+  const archives = (st.archives || []).map((a) => (a.team ? a : {
+    ...a, log: a.log || [],
+    team: (st.monthTeams[a.mk] || []).filter((p) => a.snapshot?.[p.id]).map((p) => ({ ...p })),
+  }));
+  return { ...st, archives };
+}
+
 /** Retire les équipes vides créées automatiquement pour des mois hors de la saison (jamais une équipe remplie). */
 function pruneEmptyMonths(st) {
   const keep = new Set(monthsInSeason(st.season.open, st.season.close));
@@ -347,7 +369,7 @@ export function loadState(raw) {
   if (raw.version === DATA_VERSION) {
     const base = emptyState();
     const st = { ...base, ...raw, season: fixSeason({ ...base.season, ...raw.season }), badges: { ...base.badges, ...(raw.badges || {}) } };
-    return pruneEmptyMonths(pruneOrphans(st));
+    return freezeArchives(pruneEmptyMonths(pruneOrphans(st)));
   }
   const st = migrateV1(raw);
   return { ...st, season: fixSeason(st.season) };

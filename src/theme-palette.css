@@ -520,3 +520,12 @@ table.plan thead th .w { font-size: 10px; letter-spacing: 0.02em; }
 
 /* Historique : une ligne de titre par saison */
 table.data tr.year-row th { text-align: left; padding: 14px 12px 6px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); background: var(--sunk); }
+
+
+/* Historique : détail d'une archive */
+.arc-extra { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; margin-top: 22px; align-items: start; }
+.arc-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.arc-log li { display: grid; grid-template-columns: 14px auto; column-gap: 8px; font-size: 13.5px; color: var(--ink-2); }
+.arc-log li svg { margin-top: 3px; color: var(--ink-3); grid-row: span 2; }
+.arc-log .when { font: 600 11.5px var(--mono); color: var(--ink-3); }
+@media (max-width: 1100px) { .arc-extra { grid-template-columns: minmax(0, 1fr); } }

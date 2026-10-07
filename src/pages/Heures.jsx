@@ -1,20 +1,14 @@
 import React, { useState } from "react";
 import { Download, Lock, Plus, X, Check } from "lucide-react";
-import { SHIFTS, OT_ADD, ROLES, keyOf, fmtH, shortDay, totalsFor, deM } from "../data.js";
+import { SHIFTS, OT_ADD, ROLES, keyOf, fmtH, shortDay, totalsFor, deM, downloadHoursCsv } from "../data.js";
 import { PageHead, Panel, NoPlan, Avatar, PersonName, Shift } from "../ui.jsx";
 
 export default function Heures({ team, plan, dates, mk, mName, months, monthTeams, plans, archives, season, generate, setCell, say }) {
   const [sort, setSort] = useState("total");
   const [selId, setSelId] = useState(team.find((a) => a.role === "agent")?.id || "");
   if (!plan) return <><PageHead title="Heures" /><NoPlan month={mName} onGenerate={generate} /></>;
-  // Tableau pour la paie, lisible directement dans Excel (séparateur « ; », virgule décimale)
   const exportCsv = () => {
-    const num = (h) => (Math.round(h * 100) / 100).toString().replace(".", ",");
-    const head = ["Nom", "Prénom", "Fonction", "Jours travaillés", "Coupés", "Heures de base", "Heures sup", "Total", "Total (h:min)"];
-    const lines = team.map((a) => { const t = totalsFor(a, dates, plan); return [a.last.toUpperCase(), a.first, ROLES[a.role].label, t.worked, t.cp, num(t.base), num(t.ot), num(t.total), fmtH(t.total)]; });
-    const csv = "\ufeff" + [head, ...lines].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\r\n");
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    a.download = `Heures-Handiplage_${dates[0] ? keyOf(dates[0]).slice(0, 7) : "mois"}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    downloadHoursCsv(team, dates, plan, mk);
     say("Décompte des heures téléchargé (.csv), à ouvrir dans Excel.");
   };
   const rows = team.map((a) => ({ a, ...totalsFor(a, dates, plan) })).sort((x, y) => (sort === "name" ? x.a.last.localeCompare(y.a.last) : sort === "ot" ? y.ot - x.ot : y.total - x.total));

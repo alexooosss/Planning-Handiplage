@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { supabase, PLANNING_ID } from "./supabase.js";
 import {
-  monthsInSeason, monthDates, monthName, buildPlanning, keyOf, pkey, uid, todayKey, frDate, loadState, emptyState, DATA_VERSION, seasonHours, deM } from "./data.js";
+  monthsInSeason, monthDates, monthName, buildPlanning, keyOf, pkey, uid, todayKey, frDate, loadState, emptyState, DATA_VERSION, seasonHours, deM, parseDate, dayLabel, SHIFTS, fmtH } from "./data.js";
 import { Avatar } from "./ui.jsx";
 import Planning from "./pages/Planning.jsx";
 import Equipe from "./pages/Equipe.jsx";
@@ -117,11 +117,23 @@ export default function App() {
     if (archived) setArchives((as) => as.map((a) => (a.mk === mk ? { ...a, snapshot: fn(a.snapshot) } : a)));
     else setPlans((p) => ({ ...p, [mk]: fn(p[mk] || {}) }));
   };
-  const setCell = (id, dk, patch) => updPlan((pl) => ({ ...pl, [id]: { ...(pl[id] || {}), [dk]: { type: "R", ot: 0, ...(pl[id]?.[dk] || {}), ...patch } } }));
+  // Journal d'un mois validé : toute modification après validation y est notée
+  const logArchive = (m, text) => setArchives((as) => as.map((a) => (a.mk === m ? { ...a, log: [...(a.log || []), { at: Date.now(), text }] } : a)));
+  const nameOf = (id) => { const a = team.find((x) => x.id === id); return a ? `${a.first} ${a.last.toUpperCase()}` : "?"; };
+  const setCell = (id, dk, patch) => {
+    if (archived) {
+      const old = plan?.[id]?.[dk] || { type: "R", ot: 0 }, day = dayLabel(parseDate(dk));
+      if (patch.type && patch.type !== old.type) logArchive(mk, `${nameOf(id)}, ${day} : ${SHIFTS[old.type].label} → ${SHIFTS[patch.type].label} (modification manuelle)`);
+      else if (patch.ot !== undefined && Math.abs((patch.ot || 0) - (old.ot || 0)) > 0.001) logArchive(mk, `${nameOf(id)}, ${day} : heures sup ${fmtH(old.ot || 0)} → ${fmtH(patch.ot || 0)}`);
+    }
+    setCellRaw(id, dk, patch);
+  };
+  const setCellRaw = (id, dk, patch) => updPlan((pl) => ({ ...pl, [id]: { ...(pl[id] || {}), [dk]: { type: "R", ot: 0, ...(pl[id]?.[dk] || {}), ...patch } } }));
   const swapCells = (aId, bId, dk) => {
     const A = plan[aId][dk], B = plan[bId][dk];
     const n = (id) => team.find((x) => x.id === id).first;
     updPlan((pl) => ({ ...pl, [aId]: { ...pl[aId], [dk]: { ...A, type: B.type, tag: null } }, [bId]: { ...pl[bId], [dk]: { ...B, type: A.type, tag: null } } }));
+    if (archived) logArchive(mk, `${nameOf(aId)} (${SHIFTS[A.type].label}) et ${nameOf(bId)} (${SHIFTS[B.type].label}) permutés, ${dayLabel(parseDate(dk))}`);
     say(`${n(aId)} et ${n(bId)} permutés le ${Number(dk.slice(8))}.`, () => updPlan((pl) => ({ ...pl, [aId]: { ...pl[aId], [dk]: A }, [bId]: { ...pl[bId], [dk]: B } })));
   };
   // Heures déjà faites avant le mois m, par fiche de l'équipe du mois (pour équilibrer la génération)
@@ -146,7 +158,7 @@ export default function App() {
     say("Toute la saison a été générée. Les mois validés sont conservés.", () => setPlans(before));
   };
   const validate = () => {
-    setArchives((as) => [...as.filter((a) => a.mk !== mk), { mk, validatedAt: frDate(todayKey()), snapshot: clone(db.plans[mk]) }]);
+    setArchives((as) => [...as.filter((a) => a.mk !== mk), { mk, validatedAt: frDate(todayKey()), snapshot: clone(db.plans[mk]), team: clone(team.filter((a) => db.plans[mk]?.[a.id])), log: [] }]);
     setConfirmValidate(false);
     say(`${mName} validé : archivé et publié dans l’espace des agents.`);
   };
@@ -163,7 +175,12 @@ export default function App() {
         return { ...pl, [aId]: { ...pl[aId], [r.date]: { ...A, type: B.type, tag: null } }, [bId]: { ...pl[bId], [r.date]: { ...B, type: A.type, tag: null } } };
       };
       setPlans((p) => (p[r.monthKey] ? { ...p, [r.monthKey]: apply(p[r.monthKey]) } : p));
-      setArchives((as) => as.map((a) => (a.mk === r.monthKey ? { ...a, snapshot: apply(a.snapshot) } : a)));
+      const who = (key) => { const p = (db.monthTeams[r.monthKey] || []).find((a) => pkey(a) === key); return p ? `${p.first} ${p.last.toUpperCase()}` : key; };
+      const arcPl = db.archives.find((a) => a.mk === r.monthKey)?.snapshot, A = arcPl?.[aId]?.[r.date], B = bId && arcPl?.[bId]?.[r.date];
+      const text = r.type === "leave"
+        ? `Congé accepté : ${who(r.from)}, ${dayLabel(parseDate(r.date))}${A ? ` (${SHIFTS[A.type].label} → Indisponible)` : ""}${r.reason ? `. Motif : « ${r.reason} »` : ""}`
+        : `Échange accepté : ${who(r.from)}${A ? ` (${SHIFTS[A.type].label})` : ""} ↔ ${who(r.target)}${B ? ` (${SHIFTS[B.type].label})` : ""}, ${dayLabel(parseDate(r.date))}${r.reason ? `. Motif : « ${r.reason} »` : ""}`;
+      setArchives((as) => as.map((a) => (a.mk === r.monthKey ? { ...a, snapshot: apply(a.snapshot), log: [...(a.log || []), { at: Date.now(), text: text + (reply ? `. Réponse : « ${reply} »` : "") }] } : a)));
     }
     setRequests((l) => l.map((x) => (x.id === r.id ? { ...x, status: ok ? "approved" : "rejected", reply } : x)));
     say(`Demande ${ok ? "acceptée et appliquée au planning" : "refusée"}. L’agent voit la réponse dans son espace.`);
