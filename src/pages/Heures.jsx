@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Download, Lock, Plus, X, Check } from "lucide-react";
-import { SHIFTS, OT_ADD, ROLES, keyOf, fmtH, shortDay, totalsFor, seasonHours, pkey, deM } from "../data.js";
+import { SHIFTS, OT_ADD, ROLES, keyOf, fmtH, shortDay, totalsFor, deM } from "../data.js";
 import { PageHead, Panel, NoPlan, Avatar, PersonName, Shift } from "../ui.jsx";
 
 export default function Heures({ team, plan, dates, mk, mName, months, monthTeams, plans, archives, season, generate, setCell, say }) {
@@ -17,10 +17,6 @@ export default function Heures({ team, plan, dates, mk, mName, months, monthTeam
     a.download = `Heures-Handiplage_${dates[0] ? keyOf(dates[0]).slice(0, 7) : "mois"}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     say("Décompte des heures téléchargé (.csv), à ouvrir dans Excel.");
   };
-  // Cumul de la saison jusqu'à ce mois inclus
-  const upTo = months.slice(0, months.indexOf(mk) + 1);
-  const cum = seasonHours(upTo, { archives, plans, monthTeams, season });
-  const cumAvg = team.length ? team.reduce((s, a) => s + (cum[pkey(a)] || 0), 0) / team.length : 0;
   const rows = team.map((a) => ({ a, ...totalsFor(a, dates, plan) })).sort((x, y) => (sort === "name" ? x.a.last.localeCompare(y.a.last) : sort === "ot" ? y.ot - x.ot : y.total - x.total));
   const sum = (k) => rows.reduce((s, r) => s + r[k], 0);
   const avg = sum("total") / rows.length, maxT = Math.max(...rows.map((r) => r.total)), maxOT = Math.max(1, ...rows.map((r) => r.ot));
@@ -49,7 +45,7 @@ export default function Heures({ team, plan, dates, mk, mName, months, monthTeam
         <Panel title="Décompte par personne" right={<span className="muted small">Base = horaires affectés · Sup = compléments et ajouts</span>} flush>
           <div style={{ overflowX: "auto" }}>
             <table className="data">
-              <thead><tr><th>Personne</th><th className="r">Jours</th><th className="r">Coupés</th><th className="r">Base</th><th className="r">Sup.</th><th className="r">Total</th><th style={{ width: "20%" }}>Écart au mois</th><th className="r" title="Total depuis le début de la saison">Saison</th></tr></thead>
+              <thead><tr><th>Personne</th><th className="r">Jours</th><th className="r">Coupés</th><th className="r">Base</th><th className="r">Sup.</th><th className="r">Total</th><th style={{ width: "20%" }}>Écart au mois</th></tr></thead>
               <tbody>
                 {rows.map(({ a, base, ot, worked, cp, total }) => {
                   const delta = total - avg;
@@ -62,7 +58,6 @@ export default function Heures({ team, plan, dates, mk, mName, months, monthTeam
                       <td className="r num">{ot ? <span className="chip magenta">+{fmtH(ot)}</span> : <span className="muted">·</span>}</td>
                       <td className="r num"><b>{fmtH(total)}</b></td>
                       <td><div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="bar" style={{ flex: 1 }}><i style={{ width: `${(total / maxT) * 100}%` }} /></div><span className="num small" style={{ minWidth: 50, textAlign: "right", color: Math.abs(delta) > 12 ? "var(--warn)" : "var(--ink-3)" }}>{delta >= 0 ? "+" : "−"}{fmtH(Math.abs(delta))}</span></div></td>
-                      <td className="r num"><b>{fmtH(cum[pkey(a)] || 0)}</b><span className="block small" style={{ color: Math.abs((cum[pkey(a)] || 0) - cumAvg) > 12 ? "var(--warn)" : "var(--ink-3)" }}>{(cum[pkey(a)] || 0) - cumAvg >= 0 ? "+" : "−"}{fmtH(Math.abs((cum[pkey(a)] || 0) - cumAvg))}</span></td>
                     </tr>
                   );
                 })}
