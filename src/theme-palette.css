@@ -479,3 +479,21 @@ table.sheet .n { overflow: hidden; text-overflow: ellipsis; }
   .id-card dd.num { font-size: 13pt; }
   .id-card p { margin-top: 1mm; font-size: 8pt; }
 }
+
+/* Fiches d'identifiants : les trois informations côte à côte pour occuper la largeur */
+@media print {
+  .id-card { height: 40mm; }
+  .id-card .id-info { justify-content: space-between; padding: 5mm 7mm 4mm; gap: 0; }
+  .id-name { font-size: 15pt; letter-spacing: -0.01em; }
+  .id-card dl {
+    display: grid; grid-auto-flow: column; grid-template-rows: auto auto; grid-template-columns: max-content 1fr 1fr;
+    gap: 1mm 0; margin: 0;
+  }
+  .id-card dt { font-size: 7.5pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #5D6680; padding: 0 5mm; border-left: 0.3mm solid #C3BFB8; }
+  .id-card dd, .id-card dd:first-of-type { padding: 0 5mm; border-left: 0.3mm solid #C3BFB8; font-size: 10pt; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; align-self: center; }
+  .id-card dt:first-of-type, .id-card dd:first-of-type { padding-left: 0; border-left: 0; }
+  .id-card dt:first-of-type, .id-card dd:first-of-type { padding-right: 6mm; }
+  .id-card dd:first-of-type { font-size: 9.5pt; overflow: visible; text-overflow: clip; }
+  .id-card dd.num { font-size: 17pt; letter-spacing: 0.06em; }
+  .id-card p { margin: 0; font-size: 8pt; color: #5D6680; }
+}
