@@ -51,33 +51,48 @@ export default function App() {
     .catch(() => { if (initial) { setLoadError(true); setDb(emptyState()); } }), []);
   useEffect(() => { fetchState(true); }, [fetchState]);
 
-  // En revenant sur l'onglet : si les données ont changé ailleurs et que rien n'est en cours ici, on recharge
-  const saving = useRef(false);
+  // Modifications locales pas encore enregistrées (attente de 2,5 s) ou enregistrement en cours
+  const unsaved = useRef(false), inflight = useRef(false);
+  const busy = () => unsaved.current || inflight.current;
+
+  // Un autre ordinateur a enregistré : on recharge si rien n'est en cours ici (sinon l'enregistrement le signalera)
+  const onRemote = useCallback((updatedAt) => {
+    if (sameVersion(updatedAt, version.current) || busy()) return;
+    fetchState(false);
+  }, [fetchState]);
+
+  // Synchronisation en direct (Supabase Realtime) + contrôle en revenant sur l'onglet
   useEffect(() => {
+    if (loadError) return;
+    const channel = supabase.channel(`planning-${PLANNING_ID}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "planning_state", filter: `id=eq.${PLANNING_ID}` }, (msg) => onRemote(msg.new?.updated_at))
+      .subscribe();
     const onShow = async () => {
-      if (document.visibilityState !== "visible" || saving.current || loadError) return;
+      if (document.visibilityState !== "visible" || busy()) return;
       const { data } = await supabase.from("planning_state").select("updated_at").eq("id", PLANNING_ID).maybeSingle();
-      if (data && !sameVersion(data.updated_at, version.current) && !saving.current) fetchState(false);
+      if (data) onRemote(data.updated_at);
     };
     document.addEventListener("visibilitychange", onShow);
-    return () => document.removeEventListener("visibilitychange", onShow);
-  }, [fetchState, loadError]);
+    return () => { document.removeEventListener("visibilitychange", onShow); supabase.removeChannel(channel); };
+  }, [onRemote, loadError]);
 
-  // Enregistrement automatique 2,5 s après la dernière modification, seulement si personne n'a enregistré entre-temps
+  // Enregistrement automatique 2,5 s après la dernière modification. La base n'écrit que si personne
+  // n'a enregistré entre-temps (fonction save_planning) : deux ordinateurs ne peuvent pas s'écraser.
   useEffect(() => {
     if (!db || loadError || conflict) return;
     if (firstSave.current) { firstSave.current = false; return; }
-    setSave({ s: "saving" }); saving.current = true;
+    setSave({ s: "saving" }); unsaved.current = true;
     const t = setTimeout(async () => {
-      const { data: cur } = await supabase.from("planning_state").select("updated_at").eq("id", PLANNING_ID).maybeSingle();
-      if (cur && !sameVersion(cur.updated_at, version.current)) { setConflict(true); setSave({ s: "error" }); saving.current = false; return; }
-      const stamp = new Date().toISOString();
+      unsaved.current = false; inflight.current = true;
       const payload = { ...db, version: DATA_VERSION, ...(legacy ? { legacyV1: legacy } : {}) };
-      const { data: saved, error } = await supabase.from("planning_state").upsert({ id: PLANNING_ID, data: payload, updated_at: stamp }).select("updated_at").maybeSingle();
-      if (!error) version.current = saved?.updated_at || stamp;
-      setSave(error ? { s: "error" } : { s: "saved", at: new Date() }); saving.current = false;
+      const { data: stamp, error } = await supabase.rpc("save_planning", { p_id: PLANNING_ID, p_expected: version.current, p_data: payload });
+      inflight.current = false;
+      if (error) { setSave({ s: "error" }); return; }
+      if (!stamp) { setConflict(true); setSave({ s: "error" }); return; } // quelqu'un a enregistré entre-temps
+      version.current = stamp;
+      setSave({ s: "saved", at: new Date() });
     }, 2500);
-    return () => { clearTimeout(t); saving.current = false; };
+    return () => { clearTimeout(t); unsaved.current = false; };
   }, [db, legacy, loadError, conflict]);
 
   // Modifie une partie de l'état (valeur ou fonction)
