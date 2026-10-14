@@ -1,0 +1,16 @@
+{
+  "name": "Handiplage Planning",
+  "short_name": "Handiplage",
+  "description": "Plannings, heures, demandes et badges de l’équipe Handiplage · CCAS Antibes",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F3F2F1",
+  "theme_color": "#F3F2F1",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
