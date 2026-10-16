@@ -38,7 +38,7 @@ export default function Heures({ team, plan, dates, mk, mName, months, monthTeam
       <div className="split" style={{ gridTemplateColumns: "minmax(0, 1fr) 360px" }}>
         <Panel title="Décompte par personne" right={<span className="muted small">Base = horaires affectés · Sup = compléments et ajouts</span>} flush>
           <div style={{ overflowX: "auto" }}>
-            <table className="data">
+            <table className="data m-hours">
               <thead><tr><th>Personne</th><th className="r">Jours</th><th className="r">Coupés</th><th className="r">Base</th><th className="r">Sup.</th><th className="r">Total</th><th style={{ width: "20%" }}>Écart au mois</th></tr></thead>
               <tbody>
                 {rows.map(({ a, base, ot, worked, cp, total }) => {
@@ -46,10 +46,10 @@ export default function Heures({ team, plan, dates, mk, mName, months, monthTeam
                   return (
                     <tr key={a.id} className={a.id === selId ? "is-sel" : undefined} onClick={() => setSelId(a.id)} style={{ cursor: "pointer" }}>
                       <td><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Avatar a={a} size={28} /><PersonName a={a} /><span className="muted small">{ROLES[a.role].short}</span></div></td>
-                      <td className="r num">{worked}</td>
-                      <td className="r num">{cp}</td>
-                      <td className="r num">{fmtH(base)}</td>
-                      <td className="r num">{ot ? <span className="chip magenta">+{fmtH(ot)}</span> : <span className="muted">·</span>}</td>
+                      <td className="r num" data-label="Jours">{worked}</td>
+                      <td className="r num" data-label="Coupés">{cp}</td>
+                      <td className="r num" data-label="Base">{fmtH(base)}</td>
+                      <td className="r num" data-label="Sup.">{ot ? <span className="chip magenta">+{fmtH(ot)}</span> : <span className="muted">·</span>}</td>
                       <td className="r num"><b>{fmtH(total)}</b></td>
                       <td><div style={{ display: "flex", alignItems: "center", gap: 8 }}><div className="bar" style={{ flex: 1 }}><i style={{ width: `${(total / maxT) * 100}%` }} /></div><span className="num small" style={{ minWidth: 50, textAlign: "right", color: Math.abs(delta) > 12 ? "var(--warn)" : "var(--ink-3)" }}>{delta >= 0 ? "+" : "−"}{fmtH(Math.abs(delta))}</span></div></td>
                     </tr>

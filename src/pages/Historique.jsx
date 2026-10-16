@@ -74,7 +74,7 @@ export default function Historique({ archives, months, plans, monthTeams, season
     <>
       <PageHead title="Historique" sub="Un mois validé est figé et archivé : c’est la version publiée aux agents et utilisée pour la paie. Un congé ou un échange accepté ensuite met aussi l’archive à jour." />
       <Panel flush>
-        <table className="data">
+        <table className="data m-hist">
           <thead><tr><th>Mois</th><th>État</th><th className="r">Personnes</th><th className="r">Heures</th><th className="r">Heures sup</th><th className="r"><span className="sr">Actions</span></th></tr></thead>
           <tbody>
             {all.map((mk, i) => {
@@ -90,9 +90,9 @@ export default function Historique({ archives, months, plans, monthTeams, season
                 <tr>
                   <td><b>{monthName(mk)} {mk.slice(0, 4)}</b></td>
                   <td>{a ? <span className="chip ok"><CheckCircle2 size={12} />validé le {a.validatedAt}</span> : plan ? <span className="chip warn">brouillon</span> : <span className="chip neutral">à générer</span>}</td>
-                  <td className="r num">{team.length}</td>
-                  <td className="r num">{plan ? fmtH(tot.reduce((s, t) => s + t.total, 0)) : "·"}</td>
-                  <td className="r num">{plan ? fmtH(tot.reduce((s, t) => s + t.ot, 0)) : "·"}</td>
+                  <td className="r num" data-label="Personnes">{team.length}</td>
+                  <td className="r num" data-label="Heures">{plan ? fmtH(tot.reduce((s, t) => s + t.total, 0)) : "·"}</td>
+                  <td className="r num" data-label="Sup">{plan ? fmtH(tot.reduce((s, t) => s + t.ot, 0)) : "·"}</td>
                   <td className="r">{a ? <button className="btn btn-primary btn-sm" onClick={() => setViewing(mk)}><Archive size={14} />Voir l’archive</button> : inSeason ? <button className="btn btn-ghost btn-sm" onClick={() => openMonth(mk)}>Ouvrir</button> : plan ? <button className="btn btn-ghost btn-sm" onClick={() => setViewing(mk)}>Voir</button> : null}</td>
                 </tr>
                 </React.Fragment>

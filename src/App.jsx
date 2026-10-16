@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   Users, LayoutGrid, Activity, Clock, Inbox, CalendarDays, FileDown, IdCard, Archive, KeyRound,
-  Wand2, CheckCircle2, Check, LogOut, Download, Upload, Printer, Loader2, AlertTriangle, X,
+  Wand2, CheckCircle2, Check, LogOut, Download, Upload, Printer, Loader2, AlertTriangle, X, Menu, UserRound,
 } from "lucide-react";
 import { supabase, PLANNING_ID } from "./supabase.js";
 import {
@@ -106,6 +106,7 @@ export default function App() {
   const [month, setMonth] = useState(todayKey().slice(0, 7));
   const [profiles, setProfiles] = useState(() => { try { return JSON.parse(localStorage.getItem(PROFILES_KEY) || "{}"); } catch { return {}; } });
   const [profileOpen, setProfileOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false); // téléphone : panneau « Plus »
   const [sel, setSel] = useState(null);
   const [covDay, setCovDay] = useState(0);
   const [confirmValidate, setConfirmValidate] = useState(false);
@@ -334,13 +335,9 @@ export default function App() {
       )}
 
       <div className="main">
-        {isAdmin && (
-          <nav className="mobile-nav" aria-label="Navigation">
-            {NAV.flatMap(([, items]) => items).map(([id, label, Icon]) => <button key={id} className="nav-item" aria-current={page === id ? "page" : undefined} onClick={() => setPage(id)}><Icon size={16} />{label}</button>)}
-          </nav>
-        )}
         <header className="topbar">
           {!isAdmin && <div className="side-brand compact"><img className="logo" src={`${BASE}logo.svg`} alt="Handiplage Planning" /></div>}
+          {isAdmin && <div className="side-brand compact m-only"><img className="logo" src={`${BASE}logo-light.svg`} alt="Handiplage Planning" /></div>}
           <div className="months" role="group" aria-label="Mois de la saison">
             {months.map((m) => (
               <button key={m} className="month" aria-pressed={m === mk} onClick={() => { setMonth(m); setSel(null); setConfirmValidate(false); setCovDay(0); }}>
@@ -379,6 +376,54 @@ export default function App() {
         </main>
       </div>
 
+      {isAdmin && (() => {
+        // Téléphone : les 4 écrans du quotidien à portée du pouce, le reste dans « Plus »
+        const MAIN = ["planning", "equipe", "demandes", "heures"];
+        const all = NAV.flatMap(([, items]) => items), byId = Object.fromEntries(all.map((x) => [x[0], x]));
+        const go = (id) => { setPage(id); setSel(null); setMoreOpen(false); window.scrollTo(0, 0); };
+        const inMore = !MAIN.includes(page);
+        return (
+          <>
+            <nav className="tabbar" aria-label="Navigation principale">
+              {MAIN.map((id) => {
+                const [, label, Icon, extra] = byId[id];
+                const dot = extra && typeof extra === "object" ? (extra.count || (extra.warn ? "!" : null)) : null;
+                return (
+                  <button key={id} aria-current={page === id && !moreOpen ? "page" : undefined} onClick={() => go(id)}>
+                    <Icon size={21} strokeWidth={1.9} />{label}
+                    {dot != null && <i className={`tab-dot${extra.warn ? " warn" : ""}`}>{dot}</i>}
+                  </button>
+                );
+              })}
+              <button aria-current={inMore || moreOpen ? "page" : undefined} aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+                <Menu size={21} strokeWidth={1.9} />{inMore && !moreOpen ? byId[page]?.[1] || "Plus" : "Plus"}
+              </button>
+            </nav>
+            {moreOpen && (
+              <div className="more-wrap" onClick={() => setMoreOpen(false)}>
+                <div className="more-sheet" role="dialog" aria-label="Plus" onClick={(e) => e.stopPropagation()}>
+                  <div className="more-grip" aria-hidden="true" />
+                  <div className="more-grid">
+                    {all.filter(([id]) => !MAIN.includes(id)).map(([id, label, Icon, extra]) => (
+                      <button key={id} className="more-tile" aria-current={page === id ? "page" : undefined} onClick={() => go(id)}>
+                        <Icon size={22} strokeWidth={1.8} /><b>{label}</b>
+                        {extra != null && typeof extra !== "object" && <span>{extra}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="more-list">
+                    <button onClick={() => { setMoreOpen(false); exportJSON(); }}><Download size={18} />Sauvegarder (.json)</button>
+                    <label><Upload size={18} />Importer…<input type="file" accept="application/json" hidden onChange={(e) => { setMoreOpen(false); importJSON(e); }} /></label>
+                    <button onClick={() => { setMoreOpen(false); setProfileOpen(true); }}><UserRound size={18} />Mon profil<span className="muted">{session.name}</span></button>
+                    <button className="danger" onClick={() => { setMoreOpen(false); setSession(null); }}><LogOut size={18} />Se déconnecter</button>
+                  </div>
+                  <p className="more-foot">CCAS Antibes · saison {season.open.slice(0, 4)}</p>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
       {profileOpen && <Profile session={session} profile={profile} setProfile={(p) => setProfiles({ ...profiles, [session.id]: p })} changePassword={changePassword} onClose={() => setProfileOpen(false)} />}
       {toast && <div className="toast" role="status"><Check size={17} />{toast.msg}{toast.undo && <button onClick={() => { toast.undo(); setToast(null); }}>Annuler</button>}</div>}
     </div>

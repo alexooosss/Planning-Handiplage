@@ -45,7 +45,7 @@ export default function Comptes({ accounts, setAccounts, allPeople, say }) {
       {missing.length > 0 && <div className="note warn"><AlertTriangle size={16} /><span>Sans compte : {missing.map((p) => `${p.first} ${p.last.toUpperCase()}`).join(", ")}.</span></div>}
       <Panel flush>
         <div style={{ overflowX: "auto" }}>
-          <table className="data">
+          <table className="data m-acc">
             <thead><tr><th>Identifiant</th><th>Mot de passe</th><th>Rôle</th><th>Personne liée</th><th className="r"><span className="sr">Actions</span></th></tr></thead>
             <tbody>
               {accounts.map((c, i) => (

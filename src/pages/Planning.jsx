@@ -55,7 +55,7 @@ export default function Planning(p) {
 
       <div className={`plan-wrap${sel ? " open" : ""}`}>
         <div className="grid-scroll" role="region" aria-label="Grille du planning" tabIndex={0}>
-          <table className="plan" style={{ minWidth: 200 + dates.length * 28 }}>
+          <table className="plan" style={{ "--days": dates.length }}>
             <thead>
               <tr>
                 <th className="who">Équipe · total du mois</th>

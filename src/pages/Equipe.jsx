@@ -78,7 +78,7 @@ export default function Equipe({ team, setTeam, mk, mName, months, season, setSe
 
         <Panel title={`${team.length} personnes`} right={<span className="muted small">Les modifications s’appliquent à {mName.toLowerCase()} uniquement</span>} flush>
           <div style={{ overflowX: "auto" }}>
-            <table className="data">
+            <table className="data m-team">
               <thead><tr><th>Prénom · Nom</th><th>Fonction</th><th>Repos</th><th>Compte</th><th>Badge</th><th className="r"><span className="sr">Actions</span></th></tr></thead>
               <tbody>
                 {team.map((a) => {
